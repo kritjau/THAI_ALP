@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+opencv-python
+ultralytics
+huggingface_hub
+easyocr
+python-dotenv

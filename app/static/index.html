@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Thai ALPR</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <h1>Thai ALPR — Live Plate Recognition</h1>
+</header>
+<main>
+  <section class="video-panel">
+    <img src="/video_feed" alt="live camera feed" />
+  </section>
+  <section class="log-panel">
+    <h2>Detections</h2>
+    <table id="detections-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Plate</th>
+          <th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody id="detections-body"></tbody>
+    </table>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
