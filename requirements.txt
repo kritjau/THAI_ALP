@@ -3,5 +3,13 @@ uvicorn[standard]
 opencv-python
 ultralytics
 huggingface_hub
-easyocr
+paddleocr
 python-dotenv
+
+# paddlepaddle is not on PyPI (and has no wheel for Python 3.14+ as of writing) --
+# install separately BEFORE this file, matching your Python version:
+#   pip install paddlepaddle -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+# Stick to the CPU build -- paddlepaddle-gpu installs its own `nvidia.*` CUDA
+# libraries that collide with a CUDA build of torch (used for the detector) in
+# the same venv, breaking torch's CUDA import. See README.md Known limitations.
+# The detector alone can still use a GPU via DEVICE=cuda:0 in .env.

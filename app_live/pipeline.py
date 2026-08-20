@@ -1,23 +1,32 @@
 from __future__ import annotations
 
-import logging
+import os
 import time
-from pathlib import Path
 
 import cv2
 
-from . import db
-from .camera import CameraStream
-from .config import settings
-from .detector import PlateDetector
-from .json_export import JsonExporter
-from .ocr import PlateReader, looks_like_thai_plate
-from .tracker import PlateTracker
+from app.camera import CameraStream
+from app.config import settings
+from app.detector import PlateDetector
+from app.ocr import PlateReader, looks_like_thai_plate
+from app.tracker import PlateTracker
 
-logger = logging.getLogger(__name__)
+# ByteTrack can still fragment a car into a new track id after an occlusion or
+# a gap between processed frames, which would otherwise show up as a second
+# "new" detection for the same physical car. This cooldown dedupes by the OCR
+# text itself, independent of track id, so a re-appearing plate within this
+# window is treated as a continuation, not a new sighting. Local to app_live
+# (not a shared app/ setting) -- read straight from the environment so .env
+# doesn't need an app/config.py field for it.
+_PLATE_COOLDOWN_SECONDS = float(os.environ.get("PLATE_COOLDOWN_SECONDS", 45))
 
 
-class ALPRPipeline:
+class LiveOnlyPipeline:
+    """Same detect -> track -> OCR flow as app/pipeline.py, but nothing is ever
+    written to disk: no saved crop, no database row, no JSON export. A plate's
+    text only exists in memory for as long as its track is alive, so nothing
+    here needs a data-retention policy."""
+
     def __init__(self):
         self.camera = CameraStream(settings.camera_source_value()).start()
         self.detector = PlateDetector()
@@ -26,15 +35,13 @@ class ALPRPipeline:
             ttl_seconds=settings.track_ttl_seconds,
             reocr_seconds=settings.track_reocr_seconds,
         )
-        self.json_exporter = JsonExporter()
         self._latest_annotated = None
         self._frame_count = 0
         self._visible_tracks: list = []
-        Path(settings.captures_dir).mkdir(parents=True, exist_ok=True)
+        # plate_text -> last time it was seen, across all track ids
+        self._recent_plates: dict[str, float] = {}
 
     def step(self) -> list[dict]:
-        """Grab one frame; run detection+OCR only every Nth frame so a CPU-bound
-        pipeline still keeps the live view smooth."""
         frame = self.camera.read()
         if frame is None:
             return []
@@ -45,8 +52,6 @@ class ALPRPipeline:
         else:
             self._draw(frame)
             events = []
-
-        self.json_exporter.maybe_flush()
         return events
 
     def _process(self, frame) -> list[dict]:
@@ -65,57 +70,48 @@ class ALPRPipeline:
             text, ocr_conf = self.reader.read(crop)
             track.last_ocr = time.time()
 
-            # Discard noise (motion blur, false-positive detections without Thai
-            # script) and don't overwrite an already-logged plate with a worse read
-            # -- driving footage re-OCRs the same persisting track every few seconds.
             if not text or ocr_conf < settings.min_log_confidence or not looks_like_thai_plate(text):
                 continue
             if track.logged and ocr_conf <= track.confidence:
                 continue
 
+            now = time.time()
+            # Only a track's *first* successful read is a "new sighting" --
+            # later re-OCRs of the same track are refinements and should
+            # always go through so the dashboard row keeps updating.
+            is_new_sighting = not track.logged
+            last_seen = self._recent_plates.get(text)
+            is_recent_duplicate = (
+                is_new_sighting and last_seen is not None and (now - last_seen) < _PLATE_COOLDOWN_SECONDS
+            )
+            self._recent_plates[text] = now
+
             track.plate_text = text
             track.confidence = ocr_conf
-            image_path = self._save_crop(crop, text)
-            if track.logged:
-                db.update_detection(track.db_id, text, ocr_conf, (x1, y1, x2, y2), image_path)
-                self._delete_crop(track.image_path)
-            else:
-                track.db_id = db.insert_detection(text, ocr_conf, (x1, y1, x2, y2), image_path)
-                track.logged = True
-            track.image_path = image_path
-            self.json_exporter.record(text, ocr_conf, image_path)
-            events.append(
-                {
-                    "id": track.db_id,
-                    "plate_text": text,
-                    "confidence": ocr_conf,
-                    "bbox": [x1, y1, x2, y2],
-                    "timestamp": time.time(),
-                    "image_path": image_path,
-                }
-            )
+            track.logged = True
+            if not is_recent_duplicate:
+                events.append(
+                    {
+                        "id": track_id,
+                        "plate_text": text,
+                        "confidence": ocr_conf,
+                        "bbox": [x1, y1, x2, y2],
+                        "timestamp": now,
+                    }
+                )
 
+        self._prune_recent_plates()
         self._visible_tracks = current_tracks
         self._draw(frame)
         return events
 
-    def _save_crop(self, crop, text) -> str | None:
-        if crop.size == 0:
-            return None
-        safe_text = "".join(c for c in text if c.isalnum()) or "plate"
-        filename = f"{int(time.time() * 1000)}_{safe_text}.jpg"
-        path = Path(settings.captures_dir) / filename
-        cv2.imwrite(str(path), crop)
-        return str(path)
-
-    @staticmethod
-    def _delete_crop(image_path: str | None):
-        if image_path:
-            Path(image_path).unlink(missing_ok=True)
+    def _prune_recent_plates(self):
+        cutoff = time.time() - _PLATE_COOLDOWN_SECONDS
+        stale = [text for text, seen in self._recent_plates.items() if seen < cutoff]
+        for text in stale:
+            del self._recent_plates[text]
 
     def _draw(self, frame):
-        # OpenCV can't render Thai glyphs, so the overlay only shows a box and
-        # confidence; the full Thai plate text is shown in the web log panel.
         annotated = frame.copy()
         for t in self._visible_tracks:
             x1, y1, x2, y2 = t.box[:4]
