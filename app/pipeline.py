@@ -10,7 +10,8 @@ from . import db
 from .camera import CameraStream
 from .config import settings
 from .detector import PlateDetector
-from .ocr import PlateReader
+from .json_export import JsonExporter
+from .ocr import PlateReader, looks_like_thai_plate
 from .tracker import PlateTracker
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,13 @@ class ALPRPipeline:
         self.detector = PlateDetector()
         self.reader = PlateReader()
         self.tracker = PlateTracker(
-            iou_threshold=settings.track_iou_threshold,
             ttl_seconds=settings.track_ttl_seconds,
             reocr_seconds=settings.track_reocr_seconds,
         )
+        self.json_exporter = JsonExporter()
         self._latest_annotated = None
         self._frame_count = 0
+        self._visible_tracks: list = []
         Path(settings.captures_dir).mkdir(parents=True, exist_ok=True)
 
     def step(self) -> list[dict]:
@@ -43,29 +45,48 @@ class ALPRPipeline:
         else:
             self._draw(frame)
             events = []
+
+        self.json_exporter.maybe_flush()
         return events
 
     def _process(self, frame) -> list[dict]:
         events = []
         boxes = self.detector.detect(frame)
-        for (x1, y1, x2, y2, _det_conf) in boxes:
-            track = self.tracker.match((x1, y1, x2, y2))
+        current_tracks = []
+        for (x1, y1, x2, y2, _det_conf, track_id) in boxes:
+            if track_id is None:
+                continue  # tracker hasn't confirmed an id for this box yet
+            track = self.tracker.get(track_id, (x1, y1, x2, y2))
+            current_tracks.append(track)
             if not self.tracker.needs_ocr(track):
                 continue
 
             crop = frame[max(0, y1):y2, max(0, x1):x2]
             text, ocr_conf = self.reader.read(crop)
             track.last_ocr = time.time()
-            if not text:
+
+            # Discard noise (motion blur, false-positive detections without Thai
+            # script) and don't overwrite an already-logged plate with a worse read
+            # -- driving footage re-OCRs the same persisting track every few seconds.
+            if not text or ocr_conf < settings.min_log_confidence or not looks_like_thai_plate(text):
+                continue
+            if track.logged and ocr_conf <= track.confidence:
                 continue
 
             track.plate_text = text
             track.confidence = ocr_conf
-            track.logged = True
             image_path = self._save_crop(crop, text)
-            db.insert_detection(text, ocr_conf, (x1, y1, x2, y2), image_path)
+            if track.logged:
+                db.update_detection(track.db_id, text, ocr_conf, (x1, y1, x2, y2), image_path)
+                self._delete_crop(track.image_path)
+            else:
+                track.db_id = db.insert_detection(text, ocr_conf, (x1, y1, x2, y2), image_path)
+                track.logged = True
+            track.image_path = image_path
+            self.json_exporter.record(text, ocr_conf, image_path)
             events.append(
                 {
+                    "id": track.db_id,
                     "plate_text": text,
                     "confidence": ocr_conf,
                     "bbox": [x1, y1, x2, y2],
@@ -74,6 +95,7 @@ class ALPRPipeline:
                 }
             )
 
+        self._visible_tracks = current_tracks
         self._draw(frame)
         return events
 
@@ -86,11 +108,16 @@ class ALPRPipeline:
         cv2.imwrite(str(path), crop)
         return str(path)
 
+    @staticmethod
+    def _delete_crop(image_path: str | None):
+        if image_path:
+            Path(image_path).unlink(missing_ok=True)
+
     def _draw(self, frame):
         # OpenCV can't render Thai glyphs, so the overlay only shows a box and
         # confidence; the full Thai plate text is shown in the web log panel.
         annotated = frame.copy()
-        for t in self.tracker.tracks:
+        for t in self._visible_tracks:
             x1, y1, x2, y2 = t.box[:4]
             cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 200, 0), 2)
             label = f"{t.confidence * 100:.0f}%" if t.plate_text else "..."

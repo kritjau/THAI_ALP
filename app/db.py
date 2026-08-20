@@ -46,6 +46,16 @@ def insert_detection(plate_text, confidence, bbox, image_path=None, timestamp=No
         return cur.lastrowid
 
 
+def update_detection(detection_id, plate_text, confidence, bbox, image_path=None, timestamp=None):
+    ts = timestamp if timestamp is not None else time.time()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE detections SET timestamp = ?, plate_text = ?, confidence = ?, "
+            "bbox = ?, image_path = ? WHERE id = ?",
+            (ts, plate_text, confidence, ",".join(map(str, bbox)), image_path, detection_id),
+        )
+
+
 def recent_detections(limit: int = 50) -> list[dict]:
     with _connect() as conn:
         cur = conn.execute(

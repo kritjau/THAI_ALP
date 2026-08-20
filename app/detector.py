@@ -47,13 +47,26 @@ class PlateDetector:
         logger.info("Downloading license plate detector weights (%s) from %s", filename, _REPO_ID)
         return hf_hub_download(repo_id=_REPO_ID, filename=filename, local_dir=settings.models_dir)
 
-    def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int, float]]:
-        results = self.model.predict(
-            frame, conf=self.conf_threshold, device=settings.device, verbose=False
+    def detect(self, frame: np.ndarray) -> list[tuple[int, int, int, int, float, int | None]]:
+        """Detect plates and track them across calls with ByteTrack (bundled with
+        ultralytics): a proper motion-aware multi-object tracker instead of our own
+        naive box-overlap matching, at negligible extra cost -- the detector still
+        runs once per frame either way, tracking only adds cheap Kalman-filter +
+        assignment math on top. `persist=True` keeps tracker state across calls on
+        this same model instance, so it must stay one long-lived detector per stream."""
+        results = self.model.track(
+            frame,
+            conf=self.conf_threshold,
+            device=settings.device,
+            tracker="bytetrack.yaml",
+            persist=True,
+            verbose=False,
         )[0]
+        ids = results.boxes.id
         boxes = []
-        for box in results.boxes:
+        for i, box in enumerate(results.boxes):
             x1, y1, x2, y2 = box.xyxy[0].tolist()
             conf = float(box.conf[0])
-            boxes.append((int(x1), int(y1), int(x2), int(y2), conf))
+            track_id = int(ids[i].item()) if ids is not None else None
+            boxes.append((int(x1), int(y1), int(x2), int(y2), conf, track_id))
         return boxes
