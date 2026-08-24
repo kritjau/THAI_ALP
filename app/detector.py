@@ -23,6 +23,15 @@ _WEIGHT_NAMES = {
     "x": "license-plate-finetune-v1x.pt",
 }
 
+# A real plate is always a small fraction of a wide-FOV CCTV frame -- even a
+# vehicle right against the camera doesn't come close to this. A box bigger
+# than this is the detector locking onto something else on the vehicle body
+# (a decal, dealer sticker, large text) instead of the actual plate. Feeding
+# a crop that large into CPU-based OCR takes far longer than a real palm-sized
+# plate crop and stalls the single-threaded pipeline for that whole time, so
+# these are rejected here before OCR (or anything else) ever sees them.
+_MAX_PLATE_AREA_FRACTION = 0.04
+
 
 class PlateDetector:
     def __init__(self, model_size: str | None = None, conf_threshold: float | None = None):
@@ -63,9 +72,12 @@ class PlateDetector:
             verbose=False,
         )[0]
         ids = results.boxes.id
+        max_area = frame.shape[0] * frame.shape[1] * _MAX_PLATE_AREA_FRACTION
         boxes = []
         for i, box in enumerate(results.boxes):
             x1, y1, x2, y2 = box.xyxy[0].tolist()
+            if (x2 - x1) * (y2 - y1) > max_area:
+                continue  # implausibly large for a real plate -- not a plate
             conf = float(box.conf[0])
             track_id = int(ids[i].item()) if ids is not None else None
             boxes.append((int(x1), int(y1), int(x2), int(y2), conf, track_id))

@@ -74,7 +74,7 @@ memory for as long as a plate's track is alive (plus a capped 50-item
 in-RAM buffer for the dashboard's initial load), and is gone on restart.
 
 ```bash
-uvicorn app_live.main:app --port 8002
+uvicorn app_live.main:app --reload --port 8002
 ```
 
 Open http://localhost:8002.
