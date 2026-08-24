@@ -56,6 +56,12 @@ class Settings:
     captures_dir: str = os.environ.get("CAPTURES_DIR", "captures")
     db_path: str = os.environ.get("DB_PATH", "data/alpr.db")
     jpeg_quality: int = _env_int("JPEG_QUALITY", 80)
+    # Detection/OCR always run on the full-resolution frame (accuracy matters
+    # there); the *displayed* stream is downscaled to this width before JPEG
+    # encoding -- a wide-FOV CCTV frame is much bigger than a dashboard needs,
+    # and encoding/transferring/decoding it at full size is real, avoidable
+    # cost that makes the video feel choppy independent of detection speed.
+    stream_max_width: int = _env_int("STREAM_MAX_WIDTH", 1280)
 
     json_dir: str = os.environ.get("JSON_DIR", "json")
     json_export_interval_seconds: float = _env_float("JSON_EXPORT_INTERVAL_SECONDS", 20.0)

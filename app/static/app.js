@@ -9,6 +9,7 @@ function upsertRow(body, det) {
     <td>${formatTime(det.timestamp)}</td>
     <td class="plate">${det.plate_text}</td>
     <td>${Math.round(det.confidence * 100)}%</td>
+    <td>${det.vehicle_color || "-"}</td>
   `;
 
   const existing = rowsById.get(det.id);
@@ -54,5 +55,32 @@ function connectWebSocket() {
   ws.onclose = () => setTimeout(connectWebSocket, 2000);
 }
 
+function watchVideoFeed() {
+  // The video is a plain <img> pulling a multipart/x-mixed-replace stream,
+  // which browsers don't auto-retry -- unlike the WebSocket above, a dropped
+  // or silently stalled connection here just stays blank forever without
+  // this. `load` fires on every new frame, so a long gap since the last one
+  // means the stream died without the browser noticing via `error`.
+  const img = document.getElementById("video-feed");
+  let lastFrameAt = Date.now();
+
+  const reload = () => {
+    lastFrameAt = Date.now();
+    img.src = "/video_feed?_=" + Date.now();
+  };
+
+  img.addEventListener("load", () => {
+    lastFrameAt = Date.now();
+  });
+  img.addEventListener("error", () => setTimeout(reload, 2000));
+
+  setInterval(() => {
+    if (Date.now() - lastFrameAt > 8000) {
+      reload();
+    }
+  }, 3000);
+}
+
 loadHistory();
 connectWebSocket();
+watchVideoFeed();

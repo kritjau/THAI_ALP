@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,24 +27,38 @@ class JsonExporter:
         self._buffer: dict[str, dict] = {}
         self._cumulative: dict[str, dict] = self._load_cumulative()
         self._last_flush = time.time()
+        # record() now runs on a background OCR worker thread while
+        # maybe_flush() still runs on the main pipeline loop -- both touch
+        # _buffer/_cumulative, so they need to not interleave.
+        self._lock = threading.Lock()
 
-    def record(self, plate_text: str, confidence: float, image_path: str | None, timestamp: float | None = None):
+    def record(
+        self,
+        plate_text: str,
+        confidence: float,
+        image_path: str | None,
+        timestamp: float | None = None,
+        vehicle_color: str | None = None,
+    ):
         ts = timestamp if timestamp is not None else time.time()
-        existing = self._buffer.get(plate_text)
-        if existing is None or confidence > existing["confidence"]:
-            self._buffer[plate_text] = {
-                "plate_text": plate_text,
-                "confidence": confidence,
-                "timestamp": ts,
-                "image_path": image_path,
-            }
+        with self._lock:
+            existing = self._buffer.get(plate_text)
+            if existing is None or confidence > existing["confidence"]:
+                self._buffer[plate_text] = {
+                    "plate_text": plate_text,
+                    "confidence": confidence,
+                    "timestamp": ts,
+                    "image_path": image_path,
+                    "vehicle_color": vehicle_color,
+                }
 
     def maybe_flush(self) -> str | None:
         now = time.time()
         if now - self._last_flush < self.interval_seconds:
             return None
         self._last_flush = now
-        return self._flush(now)
+        with self._lock:
+            return self._flush(now)
 
     def _flush(self, now: float) -> str:
         plates = list(self._buffer.values())
@@ -77,6 +92,7 @@ class JsonExporter:
                 if entry["confidence"] > existing["confidence"]:
                     existing["confidence"] = entry["confidence"]
                     existing["image_path"] = entry["image_path"]
+                    existing["vehicle_color"] = entry["vehicle_color"]
 
         self.cumulative_path.write_text(
             json.dumps(

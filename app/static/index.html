@@ -12,7 +12,7 @@
 </header>
 <main>
   <section class="video-panel">
-    <img src="/video_feed" alt="live camera feed" />
+    <img id="video-feed" src="/video_feed" alt="live camera feed" />
   </section>
   <section class="log-panel">
     <h2>Detections</h2>
@@ -22,6 +22,7 @@
           <th>Time</th>
           <th>Plate</th>
           <th>Confidence</th>
+          <th>Vehicle color</th>
         </tr>
       </thead>
       <tbody id="detections-body"></tbody>

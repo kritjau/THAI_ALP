@@ -91,12 +91,21 @@ class CameraStream:
 
     def _loop(self):
         while self._running:
-            frame, finished = (None, False)
+            frame = None
             if self._cap is not None:
-                (ok, frame), finished = _call_with_timeout(
-                    self._cap.read, settings.camera_read_timeout_ms / 1000
-                )
-                frame = frame if finished and ok else None
+                try:
+                    result, finished = _call_with_timeout(
+                        self._cap.read, settings.camera_read_timeout_ms / 1000
+                    )
+                    # On a timeout `result` is None (not a (ok, frame) pair) --
+                    # only unpack it once a read has actually finished.
+                    if finished and result is not None:
+                        ok, frame = result
+                        frame = frame if ok else None
+                except Exception:
+                    # A read failing outright (not just timing out) shouldn't
+                    # kill this thread either -- fall through to reconnect.
+                    logger.exception("Camera read failed unexpectedly from %r", self.source)
             if frame is None:
                 logger.warning("Lost camera stream from %r, reconnecting...", self.source)
                 self._reconnect()
