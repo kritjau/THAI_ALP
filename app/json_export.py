@@ -38,7 +38,7 @@ class JsonExporter:
         confidence: float,
         image_path: str | None,
         timestamp: float | None = None,
-        vehicle_color: str | None = None,
+        color: str | None = None,
     ):
         ts = timestamp if timestamp is not None else time.time()
         with self._lock:
@@ -49,7 +49,7 @@ class JsonExporter:
                     "confidence": confidence,
                     "timestamp": ts,
                     "image_path": image_path,
-                    "vehicle_color": vehicle_color,
+                    "color": color,
                 }
 
     def maybe_flush(self) -> str | None:
@@ -92,7 +92,7 @@ class JsonExporter:
                 if entry["confidence"] > existing["confidence"]:
                     existing["confidence"] = entry["confidence"]
                     existing["image_path"] = entry["image_path"]
-                    existing["vehicle_color"] = entry["vehicle_color"]
+                    existing["color"] = entry["color"]
 
         self.cumulative_path.write_text(
             json.dumps(

@@ -9,7 +9,7 @@ class Track:
     box: tuple
     plate_text: str = ""
     confidence: float = 0.0
-    vehicle_color: str = ""
+    color: str = ""
     last_ocr: float = 0.0
     logged: bool = False
     db_id: int | None = None
