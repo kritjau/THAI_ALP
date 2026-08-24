@@ -9,7 +9,7 @@ function upsertRow(body, det) {
     <td>${formatTime(det.timestamp)}</td>
     <td class="plate">${det.plate_text}</td>
     <td>${Math.round(det.confidence * 100)}%</td>
-    <td>${det.vehicle_color || "-"}</td>
+    <td>${det.color || "-"}</td>
   `;
 
   const existing = rowsById.get(det.id);
@@ -36,12 +36,57 @@ function upsertRow(body, det) {
   }
 }
 
+const capturesById = new Map();
+const MAX_CAPTURES = 30;
+
+function upsertCapture(grid, det) {
+  // Only detections that actually carry a captured crop belong here -- the
+  // detections table still lists everything, this is just the visual gallery.
+  if (!det.image) {
+    return;
+  }
+
+  const inner = `
+    <img src="${det.image}" alt="captured plate" />
+    <div class="capture-caption">
+      <span class="plate">${det.plate_text}</span>
+      <span>${formatTime(det.timestamp)}</span>
+    </div>
+  `;
+
+  const existing = capturesById.get(det.id);
+  if (existing) {
+    existing.innerHTML = inner;
+    grid.prepend(existing);
+    return;
+  }
+
+  const card = document.createElement("div");
+  card.className = "capture-card";
+  card.innerHTML = inner;
+  capturesById.set(det.id, card);
+  grid.prepend(card);
+
+  while (grid.children.length > MAX_CAPTURES) {
+    const last = grid.lastElementChild;
+    for (const [id, el] of capturesById) {
+      if (el === last) {
+        capturesById.delete(id);
+        break;
+      }
+    }
+    grid.removeChild(last);
+  }
+}
+
 async function loadHistory() {
   const body = document.getElementById("detections-body");
+  const grid = document.getElementById("captures-grid");
   const res = await fetch("/api/detections?limit=50");
   const rows = await res.json();
   for (const det of rows.slice().reverse()) {
     upsertRow(body, det);
+    upsertCapture(grid, det);
   }
 }
 
@@ -49,8 +94,11 @@ function connectWebSocket() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws/detections`);
   const body = document.getElementById("detections-body");
+  const grid = document.getElementById("captures-grid");
   ws.onmessage = (event) => {
-    upsertRow(body, JSON.parse(event.data));
+    const det = JSON.parse(event.data);
+    upsertRow(body, det);
+    upsertCapture(grid, det);
   };
   ws.onclose = () => setTimeout(connectWebSocket, 2000);
 }

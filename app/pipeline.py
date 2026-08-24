@@ -10,7 +10,7 @@ import cv2
 
 from . import db
 from .camera import CameraStream
-from .color import classify_vehicle_color
+from .color import classify_color
 from .config import settings
 from .detector import PlateDetector
 from .json_export import JsonExporter
@@ -123,31 +123,31 @@ class ALPRPipeline:
 
         track.plate_text = text
         track.confidence = ocr_conf
-        track.vehicle_color = classify_vehicle_color(vehicle_crop)
+        track.color = classify_color(vehicle_crop)
         image_path = self._save_crop(crop, text)
         if track.logged:
             db.update_detection(
                 track.db_id, text, ocr_conf, box, image_path,
-                vehicle_color=track.vehicle_color,
+                color=track.color,
             )
             self._delete_crop(track.image_path)
         else:
             track.db_id = db.insert_detection(
                 text, ocr_conf, box, image_path,
-                vehicle_color=track.vehicle_color,
+                color=track.color,
             )
             track.logged = True
         track.image_path = image_path
         self.json_exporter.record(
             text, ocr_conf, image_path,
-            vehicle_color=track.vehicle_color,
+            color=track.color,
         )
         self._new_events.put(
             {
                 "id": track.db_id,
                 "plate_text": text,
                 "confidence": ocr_conf,
-                "vehicle_color": track.vehicle_color,
+                "color": track.color,
                 "bbox": [x1, y1, x2, y2],
                 "timestamp": time.time(),
                 "image_path": image_path,

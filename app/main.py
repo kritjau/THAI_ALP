@@ -26,6 +26,15 @@ _pipeline: ALPRPipeline | None = None
 _stop_event = threading.Event()
 
 
+def _with_image_url(item: dict) -> dict:
+    """Adds a browser-usable `image` URL alongside the stored `image_path`,
+    resolved to a fixed /captures/<filename> URL regardless of what
+    CAPTURES_DIR is actually named on disk."""
+    image_path = item.get("image_path")
+    item["image"] = f"/captures/{Path(image_path).name}" if image_path else None
+    return item
+
+
 def _processing_loop():
     global _pipeline
     _pipeline = ALPRPipeline()
@@ -33,7 +42,7 @@ def _processing_loop():
     while not _stop_event.is_set():
         try:
             for event in _pipeline.step():
-                _event_queue.put(event)
+                _event_queue.put(_with_image_url(event))
         except Exception:
             logger.exception("Error in pipeline step")
             time.sleep(0.5)
@@ -76,6 +85,9 @@ app = FastAPI(title="Thai ALPR", lifespan=lifespan)
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+Path(settings.captures_dir).mkdir(parents=True, exist_ok=True)
+app.mount("/captures", StaticFiles(directory=settings.captures_dir), name="captures")
+
 
 def _mjpeg_generator():
     while True:
@@ -111,7 +123,7 @@ async def ws_detections(websocket: WebSocket):
 
 @app.get("/api/detections")
 def api_detections(limit: int = 50):
-    return db.recent_detections(limit)
+    return [_with_image_url(item) for item in db.recent_detections(limit)]
 
 
 @app.get("/", response_class=HTMLResponse)

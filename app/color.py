@@ -72,7 +72,7 @@ def _body_region(vehicle_crop: np.ndarray) -> np.ndarray:
     return vehicle_crop[top:bottom, :]
 
 
-def classify_vehicle_color(vehicle_crop: np.ndarray | None) -> str:
+def classify_color(vehicle_crop: np.ndarray | None) -> str:
     if vehicle_crop is None or vehicle_crop.size == 0:
         return "unknown"
     rgb = _dominant_color(_body_region(vehicle_crop)) or _dominant_color(vehicle_crop)

@@ -11,9 +11,15 @@
   <h1>Thai ALPR — Live Plate Recognition</h1>
 </header>
 <main>
-  <section class="video-panel">
-    <img id="video-feed" src="/video_feed" alt="live camera feed" />
-  </section>
+  <div class="left-column">
+    <section class="video-panel">
+      <img id="video-feed" src="/video_feed" alt="live camera feed" />
+    </section>
+    <section class="captures-panel">
+      <h2>Captures</h2>
+      <div id="captures-grid" class="captures-grid"></div>
+    </section>
+  </div>
   <section class="log-panel">
     <h2>Detections</h2>
     <table id="detections-table">
@@ -22,7 +28,7 @@
           <th>Time</th>
           <th>Plate</th>
           <th>Confidence</th>
-          <th>Vehicle color</th>
+          <th>Color</th>
         </tr>
       </thead>
       <tbody id="detections-body"></tbody>

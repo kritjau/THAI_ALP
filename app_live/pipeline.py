@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import queue
@@ -9,7 +10,7 @@ import time
 import cv2
 
 from app.camera import CameraStream
-from app.color import classify_vehicle_color
+from app.color import classify_color
 from app.config import settings
 from app.detector import PlateDetector
 from app.ocr import PlateReader, looks_like_thai_plate
@@ -26,6 +27,20 @@ logger = logging.getLogger(__name__)
 # (not a shared app/ setting) -- read straight from the environment so .env
 # doesn't need an app/config.py field for it.
 _PLATE_COOLDOWN_SECONDS = float(os.environ.get("PLATE_COOLDOWN_SECONDS", 45))
+
+
+def _as_data_uri(crop) -> str | None:
+    """Encodes the plate crop as an inline base64 image so the dashboard can
+    show what was actually captured next to the OCR'd text -- entirely in
+    memory (part of the same event payload already sent over the WebSocket),
+    never written to disk, consistent with this pipeline never persisting
+    anything."""
+    if crop is None or crop.size == 0:
+        return None
+    ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, settings.jpeg_quality])
+    if not ok:
+        return None
+    return "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode("ascii")
 
 
 class LiveOnlyPipeline:
@@ -140,7 +155,7 @@ class LiveOnlyPipeline:
 
         track.plate_text = text
         track.confidence = ocr_conf
-        track.vehicle_color = classify_vehicle_color(vehicle_crop)
+        track.color = classify_color(vehicle_crop)
         track.logged = True
         if not is_recent_duplicate:
             self._new_events.put(
@@ -148,9 +163,10 @@ class LiveOnlyPipeline:
                     "id": track_id,
                     "plate_text": text,
                     "confidence": ocr_conf,
-                    "vehicle_color": track.vehicle_color,
+                    "color": track.color,
                     "bbox": [x1, y1, x2, y2],
                     "timestamp": now,
+                    "image": _as_data_uri(crop),
                 }
             )
 
