@@ -119,11 +119,16 @@ class ALPRPipeline:
 
         vehicle_boxes = self.vehicle_detector.detect(frame)
         vehicle_box = VehicleDetector.find_containing(vehicle_boxes, box)
-        vehicle_crop = frame[vehicle_box[1]:vehicle_box[3], vehicle_box[0]:vehicle_box[2]] if vehicle_box else None
+        vehicle_crop = None
+        plate_in_vehicle = None
+        if vehicle_box:
+            vx1, vy1, vx2, vy2 = vehicle_box
+            vehicle_crop = frame[vy1:vy2, vx1:vx2]
+            plate_in_vehicle = (x1 - vx1, y1 - vy1, x2 - vx1, y2 - vy1)
 
         track.plate_text = text
         track.confidence = ocr_conf
-        track.color = classify_color(vehicle_crop)
+        track.color = classify_color(vehicle_crop, exclude_box=plate_in_vehicle)
         image_path = self._save_crop(crop, text)
         if track.logged:
             db.update_detection(

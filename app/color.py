@@ -6,12 +6,14 @@ import cv2
 import numpy as np
 
 
-def _dominant_color(crop: np.ndarray, k: int = 3) -> tuple[int, int, int] | None:
-    """K-means over the crop's pixels; returns the largest cluster's centroid
-    as RGB. A vehicle crop's body paint dominates spatially throughout the
-    box, so majority pixel count is a reasonable stand-in for "the body
-    color"."""
+def _dominant_color(crop: np.ndarray, k: int = 3, mask: np.ndarray | None = None) -> tuple[int, int, int] | None:
+    """K-means over the crop's pixels (optionally restricted by `mask`);
+    returns the largest cluster's centroid as RGB. A vehicle crop's body
+    paint dominates spatially throughout the box, so majority pixel count is
+    a reasonable stand-in for "the body color"."""
     pixels = crop.reshape(-1, 3).astype(np.float32)
+    if mask is not None:
+        pixels = pixels[mask.reshape(-1) > 0]
     if len(pixels) < k:
         return None
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
@@ -60,20 +62,45 @@ def _classify(rgb: tuple[int, int, int]) -> str:
     return "red"  # purple/magenta/pink region -- closest bucket available
 
 
-def _body_region(vehicle_crop: np.ndarray) -> np.ndarray:
+def _body_region(vehicle_crop: np.ndarray) -> tuple[np.ndarray, int]:
     """Trims the vehicle detector's box down toward the body panels: the
     bottom ~20% is usually wheels/road/shadow and the top ~8% is often
     background right above the roofline, both of which skew the dominant
-    color away from the actual paint."""
+    color away from the actual paint. Returns the trimmed region plus how far
+    down its top edge sits in the original crop, so a plate box (in the
+    original crop's coordinates) can still be located within it."""
     h, w = vehicle_crop.shape[:2]
     top, bottom = int(h * 0.08), int(h * 0.80)
     if bottom <= top:
-        return vehicle_crop
-    return vehicle_crop[top:bottom, :]
+        return vehicle_crop, 0
+    return vehicle_crop[top:bottom, :], top
 
 
-def classify_color(vehicle_crop: np.ndarray | None) -> str:
+def _exclusion_mask(shape: tuple[int, int], exclude_box: tuple[int, int, int, int]) -> np.ndarray:
+    h, w = shape[:2]
+    mask = np.ones((h, w), dtype=np.uint8)
+    ex1, ey1, ex2, ey2 = exclude_box
+    ex1, ey1 = max(0, ex1), max(0, ey1)
+    ex2, ey2 = min(w, ex2), min(h, ey2)
+    if ex2 > ex1 and ey2 > ey1:
+        mask[ey1:ey2, ex1:ex2] = 0
+    return mask
+
+
+def classify_color(vehicle_crop: np.ndarray | None, exclude_box: tuple[int, int, int, int] | None = None) -> str:
+    """`exclude_box` is the plate's own box, in the same pixel coordinates as
+    `vehicle_crop` -- a tightly-cropped vehicle detection (common for
+    motorcycles, or just an imprecise box) can otherwise leave the plate's
+    own bright/white pixels as a large enough fraction of the sample to win
+    the dominant-color vote, misreading the *plate's* color as the car's."""
     if vehicle_crop is None or vehicle_crop.size == 0:
         return "unknown"
-    rgb = _dominant_color(_body_region(vehicle_crop)) or _dominant_color(vehicle_crop)
+
+    region, top_offset = _body_region(vehicle_crop)
+    mask = None
+    if exclude_box:
+        ex1, ey1, ex2, ey2 = exclude_box
+        mask = _exclusion_mask(region.shape, (ex1, ey1 - top_offset, ex2, ey2 - top_offset))
+
+    rgb = _dominant_color(region, mask=mask) or _dominant_color(region) or _dominant_color(vehicle_crop)
     return _classify(rgb) if rgb else "unknown"

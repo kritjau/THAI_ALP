@@ -2,6 +2,32 @@ function formatTime(ts) {
   return new Date(ts * 1000).toLocaleTimeString();
 }
 
+// Matches the named buckets in app/color.py -- purely a display swatch.
+const COLOR_SWATCHES = {
+  white: "#f2f2f2",
+  silver: "#c9c9c9",
+  gray: "#8a8a8a",
+  black: "#232323",
+  red: "#e5484d",
+  orange: "#f7913d",
+  yellow: "#eab308",
+  green: "#30a46c",
+  blue: "#3b82f6",
+  brown: "#92603d",
+};
+
+function colorSwatch(color) {
+  if (!color || !(color in COLOR_SWATCHES)) {
+    return `<span class="color-chip"><span class="swatch swatch-unknown"></span>${color || "unknown"}</span>`;
+  }
+  return `<span class="color-chip"><span class="swatch" style="background:${COLOR_SWATCHES[color]}"></span>${color}</span>`;
+}
+
+function setCount(id, n) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = n;
+}
+
 const rowsById = new Map();
 
 function upsertRow(body, det) {
@@ -9,31 +35,33 @@ function upsertRow(body, det) {
     <td>${formatTime(det.timestamp)}</td>
     <td class="plate">${det.plate_text}</td>
     <td>${Math.round(det.confidence * 100)}%</td>
-    <td>${det.color || "-"}</td>
+    <td>${colorSwatch(det.color)}</td>
   `;
 
   const existing = rowsById.get(det.id);
   if (existing) {
     existing.innerHTML = cells;
     body.prepend(existing); // re-reads move back to the top too, showing latest activity
-    return;
-  }
+  } else {
+    const row = document.createElement("tr");
+    row.innerHTML = cells;
+    rowsById.set(det.id, row);
+    body.prepend(row);
 
-  const row = document.createElement("tr");
-  row.innerHTML = cells;
-  rowsById.set(det.id, row);
-  body.prepend(row);
-
-  while (body.rows.length > 200) {
-    const last = body.rows[body.rows.length - 1];
-    for (const [id, el] of rowsById) {
-      if (el === last) {
-        rowsById.delete(id);
-        break;
+    while (body.rows.length > 200) {
+      const last = body.rows[body.rows.length - 1];
+      for (const [id, el] of rowsById) {
+        if (el === last) {
+          rowsById.delete(id);
+          break;
+        }
       }
+      body.deleteRow(body.rows.length - 1);
     }
-    body.deleteRow(body.rows.length - 1);
   }
+
+  document.getElementById("detections-empty").style.display = "none";
+  setCount("detections-count", rowsById.size);
 }
 
 const capturesById = new Map();
@@ -50,7 +78,10 @@ function upsertCapture(grid, det) {
     <img src="${det.image}" alt="captured plate" />
     <div class="capture-caption">
       <span class="plate">${det.plate_text}</span>
-      <span>${formatTime(det.timestamp)}</span>
+      <span class="capture-meta">
+        ${formatTime(det.timestamp)}
+        ${det.color ? `<span class="swatch" style="background:${COLOR_SWATCHES[det.color] || "#666"}"></span>` : ""}
+      </span>
     </div>
   `;
 
@@ -58,25 +89,29 @@ function upsertCapture(grid, det) {
   if (existing) {
     existing.innerHTML = inner;
     grid.prepend(existing);
-    return;
-  }
+  } else {
+    const empty = grid.querySelector(".empty-state");
+    if (empty) empty.remove();
 
-  const card = document.createElement("div");
-  card.className = "capture-card";
-  card.innerHTML = inner;
-  capturesById.set(det.id, card);
-  grid.prepend(card);
+    const card = document.createElement("div");
+    card.className = "capture-card";
+    card.innerHTML = inner;
+    capturesById.set(det.id, card);
+    grid.prepend(card);
 
-  while (grid.children.length > MAX_CAPTURES) {
-    const last = grid.lastElementChild;
-    for (const [id, el] of capturesById) {
-      if (el === last) {
-        capturesById.delete(id);
-        break;
+    while (grid.children.length > MAX_CAPTURES) {
+      const last = grid.lastElementChild;
+      for (const [id, el] of capturesById) {
+        if (el === last) {
+          capturesById.delete(id);
+          break;
+        }
       }
+      grid.removeChild(last);
     }
-    grid.removeChild(last);
   }
+
+  setCount("captures-count", capturesById.size);
 }
 
 async function loadHistory() {
@@ -90,17 +125,29 @@ async function loadHistory() {
   }
 }
 
+function setConnectionStatus(connected) {
+  const el = document.getElementById("connection-status");
+  const label = el.querySelector(".status-label");
+  el.classList.toggle("status-connected", connected);
+  el.classList.toggle("status-disconnected", !connected);
+  label.textContent = connected ? "Connected" : "Reconnecting…";
+}
+
 function connectWebSocket() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws/detections`);
   const body = document.getElementById("detections-body");
   const grid = document.getElementById("captures-grid");
+  ws.onopen = () => setConnectionStatus(true);
   ws.onmessage = (event) => {
     const det = JSON.parse(event.data);
     upsertRow(body, det);
     upsertCapture(grid, det);
   };
-  ws.onclose = () => setTimeout(connectWebSocket, 2000);
+  ws.onclose = () => {
+    setConnectionStatus(false);
+    setTimeout(connectWebSocket, 2000);
+  };
 }
 
 function watchVideoFeed() {
