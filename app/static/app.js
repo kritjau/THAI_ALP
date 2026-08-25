@@ -29,6 +29,7 @@ function setCount(id, n) {
 }
 
 const rowsById = new Map();
+const MAX_ROWS = 12;
 
 function upsertRow(body, det) {
   const cells = `
@@ -48,7 +49,7 @@ function upsertRow(body, det) {
     rowsById.set(det.id, row);
     body.prepend(row);
 
-    while (body.rows.length > 200) {
+    while (body.rows.length > MAX_ROWS) {
       const last = body.rows[body.rows.length - 1];
       for (const [id, el] of rowsById) {
         if (el === last) {
@@ -65,7 +66,7 @@ function upsertRow(body, det) {
 }
 
 const capturesById = new Map();
-const MAX_CAPTURES = 30;
+const MAX_CAPTURES = 6;
 
 function upsertCapture(grid, det) {
   // Only detections that actually carry a captured crop belong here -- the
@@ -117,7 +118,7 @@ function upsertCapture(grid, det) {
 async function loadHistory() {
   const body = document.getElementById("detections-body");
   const grid = document.getElementById("captures-grid");
-  const res = await fetch("/api/detections?limit=50");
+  const res = await fetch("/api/detections?limit=12");
   const rows = await res.json();
   for (const det of rows.slice().reverse()) {
     upsertRow(body, det);
