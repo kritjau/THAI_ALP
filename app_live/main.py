@@ -15,7 +15,6 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import registered_plates_db
-from app.config import settings
 
 from .pipeline import LiveOnlyPipeline
 
@@ -35,8 +34,8 @@ def _processing_loop():
     global _pipeline
     _pipeline = LiveOnlyPipeline()
     logger.info(
-        "ALPR live-only pipeline started (camera source=%r) -- no DB, no JSON export, no saved crops",
-        settings.camera_source,
+        "ALPR live-only pipeline started (%d camera(s): %s) -- no DB, no JSON export, no saved crops",
+        len(_pipeline.cameras), [c.name for c in _pipeline.cameras],
     )
     while not _stop_event.is_set():
         try:
@@ -87,12 +86,12 @@ _static_dir = Path(__file__).resolve().parent.parent / "app" / "static"
 app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 
-def _mjpeg_generator():
+def _mjpeg_generator(camera_id: str | None):
     while True:
         if _pipeline is None:
             time.sleep(0.1)
             continue
-        frame_bytes = _pipeline.latest_jpeg()
+        frame_bytes = _pipeline.latest_jpeg(camera_id)
         if frame_bytes is None:
             time.sleep(0.1)
             continue
@@ -102,9 +101,24 @@ def _mjpeg_generator():
 
 @app.get("/video_feed")
 def video_feed():
+    """Kept as the first/primary camera for backward compatibility (existing
+    bookmarks, a single-camera .env) -- /video_feed/{camera_id} is what a
+    multi-camera dashboard actually uses."""
     return StreamingResponse(
-        _mjpeg_generator(), media_type="multipart/x-mixed-replace; boundary=frame"
+        _mjpeg_generator(None), media_type="multipart/x-mixed-replace; boundary=frame"
     )
+
+
+@app.get("/video_feed/{camera_id}")
+def video_feed_by_camera(camera_id: str):
+    return StreamingResponse(
+        _mjpeg_generator(camera_id), media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+@app.get("/api/cameras")
+def api_cameras():
+    return _pipeline.camera_list() if _pipeline else []
 
 
 @app.websocket("/ws/detections")

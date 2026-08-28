@@ -23,10 +23,9 @@
   </div>
 </header>
 <main>
-  <section class="panel video-panel">
-    <img id="video-feed" src="/video_feed" alt="live camera feed" />
-    <span class="live-badge"><span class="live-dot"></span>LIVE</span>
-  </section>
+  <div class="video-column" id="video-column">
+    <p class="empty-state">Loading cameras…</p>
+  </div>
   <section class="panel captures-panel">
     <div class="panel-header">
       <h2>Captures</h2>
@@ -46,6 +45,7 @@
         <thead>
           <tr>
             <th>Time</th>
+            <th>Camera</th>
             <th>Plate</th>
             <th>Confidence</th>
             <th>Color</th>
@@ -57,6 +57,6 @@
     </div>
   </section>
 </main>
-<script src="/static/app.js?v=9"></script>
+<script src="/static/app.js?v=10"></script>
 </body>
 </html>

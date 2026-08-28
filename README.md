@@ -39,6 +39,20 @@ browser.
 7. `app/main.py` (FastAPI) serves the annotated stream at `/video_feed` and
    pushes new detections over a WebSocket to the dashboard at `/`.
 
+## Multiple cameras
+
+Steps 1-4 above (camera read thread, detector+tracker, OCR, vehicle/color
+classification) are one `app/camera_worker.py:CameraWorker` per camera --
+`app/pipeline.py` and `app_live/pipeline.py` each run one `CameraWorker` per
+entry in `Settings.camera_configs()` (`CAMERA_SOURCE` plus however many
+`CAMERA_SOURCE_2`, `CAMERA_SOURCE_3`, ... are set) rather than assuming a
+single camera. The dashboard renders one video panel per camera, and
+Detections/Captures carry a Camera column/tag so a plate can be tied back to
+which feed saw it. Each camera gets its own detector/tracker/OCR model
+instances (ByteTrack's tracker state, in particular, can't be shared across
+streams), so this is real added CPU/GPU/RAM cost per camera, not just a
+display change.
+
 ## Setup
 
 PaddleOCR's backend (`paddlepaddle`) isn't on PyPI and has no wheel for
@@ -66,9 +80,9 @@ recognition weights; both are cached locally afterwards.
 `app/` logs every read to SQLite, saves a crop image, and exports JSON --
 useful for a parking-lot use case, but each of those is a retained personal
 data record. `app_live/` is a separate, standalone version of the same
-detect -> track -> OCR pipeline (reuses `app/camera.py`, `detector.py`,
-`tracker.py`, `ocr.py` and the dashboard's static assets unchanged, but its
-own `pipeline.py`/`main.py`) that never writes any of that to disk: no
+detect -> track -> OCR pipeline (reuses `app/camera_worker.py` and the
+dashboard's static assets unchanged, but its own `pipeline.py`/`main.py`)
+that never writes any of that to disk: no
 database, no saved crop, no JSON export. Recognized text only exists in
 memory for as long as a plate's track is alive (plus a capped 50-item
 in-RAM buffer for the dashboard's initial load), and is gone on restart.
@@ -87,7 +101,10 @@ cameras/NVRs cap concurrent client connections per channel.
 ## Configuration (`.env`)
 
 - `CAMERA_SOURCE` — `0`/`1` for a local webcam, `rtsp://user:pass@host/stream`
-  for an IP camera, or a path to a video file.
+  for an IP camera, or a path to a video file. `CAMERA_SOURCE_2`,
+  `CAMERA_SOURCE_3`, ... (with optional `CAMERA_NAME_2`, etc. labels) run
+  more cameras side by side in the same dashboard -- see Multiple cameras
+  above.
 - `DEVICE` — plate detector (torch/ultralytics): `cpu` or `cuda:0` if you have a GPU.
 - `OCR_DEVICE` — PaddleOCR device, kept `cpu` by default even when `DEVICE` uses
   a GPU; see Known limitations below for why.

@@ -117,7 +117,7 @@ main {
   main {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-  .video-panel {
+  .video-column {
     grid-column: 1 / -1;
   }
 }
@@ -126,7 +126,7 @@ main {
   main {
     grid-template-columns: 1fr;
   }
-  .video-panel {
+  .video-column {
     grid-column: auto;
   }
 }
@@ -170,6 +170,13 @@ main {
 
 /* Video */
 
+.video-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-height: 0;
+}
+
 .video-panel {
   position: relative;
   overflow: hidden;
@@ -200,6 +207,27 @@ main {
   backdrop-filter: blur(4px);
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
+}
+
+/* Only shown once there's more than one camera -- a single-camera setup
+   (the common case) has nothing else to distinguish it from, so this stays
+   out of the way instead of relabeling the only feed there is. */
+.camera-label {
+  position: absolute;
+  top: 0.7rem;
+  left: 0.7rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+}
+
+.camera-tag {
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 
 .live-dot {
