@@ -66,6 +66,13 @@ class Settings:
     json_dir: str = os.environ.get("JSON_DIR", "json")
     json_export_interval_seconds: float = _env_float("JSON_EXPORT_INTERVAL_SECONDS", 20.0)
 
+    # HTTP endpoint hit to trigger the gate for a registered plate -- unset by
+    # default until the ESP32 board's actual control endpoint is known (see
+    # app/gate.py). Left blank, a registered-plate match still logs/shows on
+    # the dashboard, it just doesn't send a signal anywhere.
+    gate_trigger_url: str = os.environ.get("GATE_TRIGGER_URL", "")
+    gate_trigger_timeout_seconds: float = _env_float("GATE_TRIGGER_TIMEOUT_SECONDS", 3.0)
+
     def camera_source_value(self):
         """Local webcams are given as an integer index; RTSP/HTTP/file sources stay strings."""
         try:

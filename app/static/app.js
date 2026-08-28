@@ -31,10 +31,14 @@ function setCount(id, n) {
 const rowsById = new Map();
 const MAX_ROWS = 12;
 
+function registeredBadge(det) {
+  return det.registered ? ' <span class="registered-badge">GATE</span>' : "";
+}
+
 function upsertRow(body, det) {
   const cells = `
     <td>${formatTime(det.timestamp)}</td>
-    <td class="plate">${det.plate_text}</td>
+    <td class="plate">${det.plate_text}${registeredBadge(det)}</td>
     <td>${Math.round(det.confidence * 100)}%</td>
     <td>${colorSwatch(det.color)}</td>
   `;
@@ -78,7 +82,7 @@ function upsertCapture(grid, det) {
   const inner = `
     <img src="${det.image}" alt="captured plate" />
     <div class="capture-caption">
-      <span class="plate">${det.plate_text}</span>
+      <span class="plate">${det.plate_text}${registeredBadge(det)}</span>
       <span class="capture-meta">
         ${formatTime(det.timestamp)}
         ${det.color ? `<span class="swatch" style="background:${COLOR_SWATCHES[det.color] || "#666"}"></span>` : ""}
