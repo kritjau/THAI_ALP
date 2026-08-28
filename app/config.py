@@ -73,6 +73,8 @@ class Settings:
     gate_serial_port: str = os.environ.get("GATE_SERIAL_PORT", "")
     gate_serial_baud: int = _env_int("GATE_SERIAL_BAUD", 115200)
     gate_serial_timeout_seconds: float = _env_float("GATE_SERIAL_TIMEOUT_SECONDS", 2.0)
+    # How long after opening to automatically send the close pulse.
+    gate_close_delay_seconds: float = _env_float("GATE_CLOSE_DELAY_SECONDS", 10.0)
     # A small, manually-curated whitelist -- deliberately its own database,
     # separate from DB_PATH (which logs every detected plate for app/'s
     # parking-lot use case). Only app_live's gate-access check reads this.
