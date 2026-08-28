@@ -12,6 +12,8 @@ from .color import classify_color
 from .config import settings
 from .detector import PlateDetector
 from .ocr import PlateReader, looks_like_thai_plate
+from .plate_format import looks_like_valid_plate_number
+from .plate_match import normalize_plate
 from .tracker import PlateTracker
 from .vehicle_detector import VehicleDetector
 
@@ -116,10 +118,16 @@ class CameraWorker:
         track.last_ocr = time.time()
 
         # Discard noise (motion blur, false-positive detections without Thai
-        # script) and don't overwrite an already-logged plate with a worse
+        # script, a plate number that doesn't match any real Thai plate
+        # shape) and don't overwrite an already-logged plate with a worse
         # read -- driving footage re-OCRs the same persisting track every
         # few seconds.
-        if not text or ocr_conf < settings.min_log_confidence or not looks_like_thai_plate(text):
+        if (
+            not text
+            or ocr_conf < settings.min_log_confidence
+            or not looks_like_thai_plate(text)
+            or not looks_like_valid_plate_number(normalize_plate(text))
+        ):
             return
         if track.logged and ocr_conf <= track.confidence:
             return

@@ -121,9 +121,13 @@ See `.env.example` for the full list.
 - OpenCV can't render Thai glyphs, so the video overlay only shows a box and
   confidence percentage; the recognized Thai text is shown in the dashboard's
   detection log instead.
-- The plate-number line has no format validation/correction (unlike the
-  province line, which is matched against a real list) — a misread character
-  passes through as-is.
+- The plate-number line is checked against the common civilian plate shape
+  (`app/plate_format.py`: an optional leading digit, 1-2 Thai consonants,
+  1-4 digits) and rejected if it doesn't match -- but unlike the province
+  line, there's no fixed registry of every real plate number to *correct*
+  a read against, only reject an implausible one. Special-purpose plates
+  (diplomatic, trailer, tractor, etc.) follow different shapes and aren't
+  covered by this check.
 - The plate detector is a general (non-Thai-specific) model — it localizes
   any rectangular plate; accuracy depends on camera angle, distance and
   lighting like any single-model ALPR setup.
