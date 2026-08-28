@@ -1,43 +1,75 @@
 from __future__ import annotations
 
 import logging
-import urllib.request
+import threading
+
+import serial
 
 from .config import settings
 
 logger = logging.getLogger(__name__)
 
+# The ESP32 board (see firmware/gate_relay/) is reached over a USB serial
+# tether, not WiFi -- the server this runs on is on a university network
+# with enterprise auth and likely client isolation, so a WiFi station
+# connection to the board wouldn't have been reachable anyway. One
+# long-lived connection is reused across calls; a lock guards it since the
+# OCR worker thread is the only caller today, but a stale/broken connection
+# after an unplug should still self-heal on the next call rather than wedge
+# permanently.
+_lock = threading.Lock()
+_conn: serial.Serial | None = None
 _warned_unconfigured = False
 
 
-def open_gate(plate_text: str) -> bool:
-    """Fires the gate-open signal for a recognized, registered plate.
+def _get_connection() -> serial.Serial | None:
+    global _conn
+    if _conn is not None and _conn.is_open:
+        return _conn
+    try:
+        _conn = serial.Serial(
+            settings.gate_serial_port,
+            settings.gate_serial_baud,
+            timeout=settings.gate_serial_timeout_seconds,
+        )
+        return _conn
+    except Exception:
+        logger.exception("Failed to open gate serial port %r", settings.gate_serial_port)
+        _conn = None
+        return None
 
-    The actual trigger (an ESP-WROOM board wired to the existing remote,
-    firmware unknown/lost) isn't discovered yet -- this sends a plain HTTP
-    GET to GATE_TRIGGER_URL, the most common shape for a DIY ESP32 endpoint,
-    as a placeholder. Once the board's real control protocol is confirmed
-    (HTTP path/method, or something else like MQTT), replace the body of
-    this function accordingly; nothing else in the app needs to change,
-    since pipeline.py only ever calls this one function.
-    """
+
+def open_gate(plate_text: str) -> bool:
+    """Sends the gate-open pulse command to the ESP32 board. See
+    firmware/gate_relay/ for the board-side protocol."""
     global _warned_unconfigured
-    if not settings.gate_trigger_url:
+    if not settings.gate_serial_port:
         if not _warned_unconfigured:
             logger.warning(
-                "Registered plate %r matched but GATE_TRIGGER_URL is not set -- "
-                "gate signal not sent (set it in .env once the ESP32's control "
-                "endpoint is known).",
+                "Registered plate %r matched but GATE_SERIAL_PORT is not set -- "
+                "gate signal not sent.",
                 plate_text,
             )
             _warned_unconfigured = True
         return False
 
-    try:
-        with urllib.request.urlopen(settings.gate_trigger_url, timeout=settings.gate_trigger_timeout_seconds):
-            pass
-        logger.info("Gate signal sent for registered plate %r", plate_text)
-        return True
-    except Exception:
-        logger.exception("Failed to send gate signal for registered plate %r", plate_text)
+    with _lock:
+        conn = _get_connection()
+        if conn is None:
+            return False
+        try:
+            conn.reset_input_buffer()
+            conn.write(b"PULSE_OPEN\n")
+            response = conn.readline().decode(errors="replace").strip()
+        except Exception:
+            logger.exception("Gate serial write/read failed for plate %r", plate_text)
+            conn.close()
+            global _conn
+            _conn = None  # force a fresh connection next time
+            return False
+
+        if response.startswith("OK"):
+            logger.info("Gate opened for registered plate %r (%s)", plate_text, response)
+            return True
+        logger.warning("Unexpected gate response %r for plate %r", response, plate_text)
         return False

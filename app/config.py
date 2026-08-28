@@ -66,12 +66,13 @@ class Settings:
     json_dir: str = os.environ.get("JSON_DIR", "json")
     json_export_interval_seconds: float = _env_float("JSON_EXPORT_INTERVAL_SECONDS", 20.0)
 
-    # HTTP endpoint hit to trigger the gate for a registered plate -- unset by
-    # default until the ESP32 board's actual control endpoint is known (see
-    # app/gate.py). Left blank, a registered-plate match still logs/shows on
-    # the dashboard, it just doesn't send a signal anywhere.
-    gate_trigger_url: str = os.environ.get("GATE_TRIGGER_URL", "")
-    gate_trigger_timeout_seconds: float = _env_float("GATE_TRIGGER_TIMEOUT_SECONDS", 3.0)
+    # The ESP32 gate-relay board (firmware/gate_relay/) is reached over a USB
+    # serial tether, not WiFi -- see app/gate.py. Left blank, a registered-
+    # plate match still logs/shows on the dashboard, it just doesn't send a
+    # signal anywhere.
+    gate_serial_port: str = os.environ.get("GATE_SERIAL_PORT", "")
+    gate_serial_baud: int = _env_int("GATE_SERIAL_BAUD", 115200)
+    gate_serial_timeout_seconds: float = _env_float("GATE_SERIAL_TIMEOUT_SECONDS", 2.0)
     # A small, manually-curated whitelist -- deliberately its own database,
     # separate from DB_PATH (which logs every detected plate for app/'s
     # parking-lot use case). Only app_live's gate-access check reads this.

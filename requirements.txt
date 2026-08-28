@@ -5,6 +5,7 @@ ultralytics
 huggingface_hub
 paddleocr
 python-dotenv
+pyserial
 
 # paddlepaddle is not on PyPI (and has no wheel for Python 3.14+ as of writing) --
 # install separately BEFORE this file, matching your Python version:
