@@ -9,10 +9,12 @@ import time
 
 import cv2
 
+from app import registered_plates_db
 from app.camera import CameraStream
 from app.color import classify_color
 from app.config import settings
 from app.detector import PlateDetector
+from app.gate import open_gate
 from app.ocr import PlateReader, looks_like_thai_plate
 from app.tracker import PlateTracker
 from app.vehicle_detector import VehicleDetector
@@ -162,6 +164,12 @@ class LiveOnlyPipeline:
         track.confidence = ocr_conf
         track.color = classify_color(vehicle_crop, exclude_box=plate_in_vehicle)
         track.logged = True
+
+        registered = registered_plates_db.is_registered_plate(text)
+        if registered and not track.gate_opened:
+            open_gate(text)
+            track.gate_opened = True
+
         if not is_recent_duplicate:
             self._new_events.put(
                 {
@@ -172,6 +180,7 @@ class LiveOnlyPipeline:
                     "bbox": [x1, y1, x2, y2],
                     "timestamp": now,
                     "image": _as_data_uri(crop),
+                    "registered": registered,
                 }
             )
 

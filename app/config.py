@@ -72,6 +72,12 @@ class Settings:
     # the dashboard, it just doesn't send a signal anywhere.
     gate_trigger_url: str = os.environ.get("GATE_TRIGGER_URL", "")
     gate_trigger_timeout_seconds: float = _env_float("GATE_TRIGGER_TIMEOUT_SECONDS", 3.0)
+    # A small, manually-curated whitelist -- deliberately its own database,
+    # separate from DB_PATH (which logs every detected plate for app/'s
+    # parking-lot use case). Only app_live's gate-access check reads this.
+    registered_plates_db_path: str = os.environ.get(
+        "REGISTERED_PLATES_DB_PATH", "data/registered_plates.db"
+    )
 
     def camera_source_value(self):
         """Local webcams are given as an integer index; RTSP/HTTP/file sources stay strings."""
