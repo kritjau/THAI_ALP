@@ -10,10 +10,11 @@ from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from app import registered_plates_db
 from app.config import settings
 
 from .pipeline import LiveOnlyPipeline
@@ -68,6 +69,7 @@ async def _broadcast_events():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    registered_plates_db.init_db()
     thread = threading.Thread(target=_processing_loop, daemon=True)
     thread.start()
     broadcaster = asyncio.create_task(_broadcast_events())
@@ -127,3 +129,28 @@ def api_detections(limit: int = 50):
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (_static_dir / "index.html").read_text(encoding="utf-8")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page():
+    return (_static_dir / "admin.html").read_text(encoding="utf-8")
+
+
+@app.get("/api/registered-plates")
+def api_list_registered_plates():
+    return registered_plates_db.list_registered_plates()
+
+
+@app.post("/api/registered-plates")
+def api_add_registered_plate(payload: dict = Body(...)):
+    plate_text = (payload.get("plate_text") or "").strip()
+    if not plate_text:
+        raise HTTPException(status_code=400, detail="plate_text is required")
+    registered_plates_db.add_registered_plate(plate_text, payload.get("label"))
+    return {"ok": True}
+
+
+@app.delete("/api/registered-plates/{plate_text}")
+def api_remove_registered_plate(plate_text: str):
+    registered_plates_db.remove_registered_plate(plate_text)
+    return {"ok": True}

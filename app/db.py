@@ -6,7 +6,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .config import settings
-from .plate_match import normalize_plate
 
 
 @contextmanager
@@ -45,51 +44,6 @@ def init_db():
                 conn.execute("ALTER TABLE detections RENAME COLUMN vehicle_color TO color")
             else:
                 conn.execute("ALTER TABLE detections ADD COLUMN color TEXT")
-
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS registered_plates (
-                plate_text TEXT PRIMARY KEY,
-                label TEXT,
-                created_at REAL NOT NULL
-            )
-            """
-        )
-
-
-def add_registered_plate(plate_text: str, label: str | None = None) -> None:
-    normalized = normalize_plate(plate_text)
-    with _connect() as conn:
-        conn.execute(
-            "INSERT INTO registered_plates (plate_text, label, created_at) VALUES (?, ?, ?) "
-            "ON CONFLICT(plate_text) DO UPDATE SET label = excluded.label",
-            (normalized, label, time.time()),
-        )
-
-
-def remove_registered_plate(plate_text: str) -> None:
-    with _connect() as conn:
-        conn.execute(
-            "DELETE FROM registered_plates WHERE plate_text = ?", (normalize_plate(plate_text),)
-        )
-
-
-def list_registered_plates() -> list[dict]:
-    with _connect() as conn:
-        cur = conn.execute(
-            "SELECT plate_text, label, created_at FROM registered_plates ORDER BY created_at DESC"
-        )
-        rows = cur.fetchall()
-    return [{"plate_text": r[0], "label": r[1], "created_at": r[2]} for r in rows]
-
-
-def is_registered_plate(plate_text: str) -> bool:
-    with _connect() as conn:
-        cur = conn.execute(
-            "SELECT 1 FROM registered_plates WHERE plate_text = ? LIMIT 1",
-            (normalize_plate(plate_text),),
-        )
-        return cur.fetchone() is not None
 
 
 def insert_detection(plate_text, confidence, bbox, image_path=None, timestamp=None, color=None) -> int:

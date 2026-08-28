@@ -181,6 +181,17 @@ function watchVideoFeed() {
   }, 3000);
 }
 
+function revealAdminLinkIfAvailable() {
+  // Shared by app/ (no gate feature -- doesn't have this route) and
+  // app_live/ (does) -- only show the link where it'll actually work.
+  fetch("/api/registered-plates")
+    .then((res) => {
+      if (res.ok) document.getElementById("admin-link").style.display = "inline";
+    })
+    .catch(() => {});
+}
+
 loadHistory();
 connectWebSocket();
 watchVideoFeed();
+revealAdminLinkIfAvailable();

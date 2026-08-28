@@ -13,7 +13,6 @@ from .camera import CameraStream
 from .color import classify_color
 from .config import settings
 from .detector import PlateDetector
-from .gate import open_gate
 from .json_export import JsonExporter
 from .ocr import PlateReader, looks_like_thai_plate
 from .tracker import PlateTracker
@@ -130,12 +129,6 @@ class ALPRPipeline:
         track.plate_text = text
         track.confidence = ocr_conf
         track.color = classify_color(vehicle_crop, exclude_box=plate_in_vehicle)
-
-        registered = db.is_registered_plate(text)
-        if registered and not track.gate_opened:
-            open_gate(text)
-            track.gate_opened = True
-
         image_path = self._save_crop(crop, text)
         if track.logged:
             db.update_detection(
@@ -163,7 +156,6 @@ class ALPRPipeline:
                 "bbox": [x1, y1, x2, y2],
                 "timestamp": time.time(),
                 "image_path": image_path,
-                "registered": registered,
             }
         )
 
