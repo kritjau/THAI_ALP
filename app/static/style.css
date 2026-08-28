@@ -177,6 +177,41 @@ main {
   min-height: 0;
 }
 
+.camera-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.camera-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.camera-toggle input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.camera-toggle.active {
+  color: var(--text);
+  border-color: #3a4257;
+}
+
+.video-panel.camera-hidden {
+  display: none;
+}
+
 .video-panel {
   position: relative;
   overflow: hidden;

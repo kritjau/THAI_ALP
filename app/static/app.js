@@ -163,16 +163,23 @@ function connectWebSocket() {
   };
 }
 
-function watchImageStream(img) {
+function watchImageStream(img, panel) {
   // The video is a plain <img> pulling a multipart/x-mixed-replace stream,
   // which browsers don't auto-retry -- unlike the WebSocket above, a dropped
   // or silently stalled connection here just stays blank forever without
   // this. `load` fires on every new frame, so a long gap since the last one
   // means the stream died without the browser noticing via `error`.
+  //
+  // A hidden camera (see setupCameras()) has its `src` deliberately cleared
+  // to stop pulling the stream -- skip both the error-triggered reload and
+  // the staleness watchdog while hidden, otherwise this would immediately
+  // reconnect a feed the viewer just chose to turn off.
   const baseSrc = img.dataset.baseSrc;
+  const isHidden = () => panel.classList.contains("camera-hidden");
   let lastFrameAt = Date.now();
 
   const reload = () => {
+    if (isHidden()) return;
     lastFrameAt = Date.now();
     img.src = baseSrc + "?_=" + Date.now();
   };
@@ -183,10 +190,51 @@ function watchImageStream(img) {
   img.addEventListener("error", () => setTimeout(reload, 2000));
 
   setInterval(() => {
+    if (isHidden()) {
+      lastFrameAt = Date.now(); // don't let the gap build up while intentionally off
+      return;
+    }
     if (Date.now() - lastFrameAt > 8000) {
       reload();
     }
   }, 3000);
+}
+
+// Which cameras a viewer has chosen to hide -- per-browser (localStorage),
+// not sent to the server: all cameras keep detecting/recording regardless,
+// this only controls what this viewer's dashboard displays.
+const HIDDEN_CAMERAS_KEY = "alpr_hidden_cameras";
+
+function loadHiddenCameras() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(HIDDEN_CAMERAS_KEY) || "[]"));
+  } catch (err) {
+    return new Set();
+  }
+}
+
+function saveHiddenCameras(hidden) {
+  try {
+    localStorage.setItem(HIDDEN_CAMERAS_KEY, JSON.stringify([...hidden]));
+  } catch (err) {
+    // private browsing / storage disabled -- toggle still works for this
+    // page load, it just won't be remembered next visit
+  }
+}
+
+function updateNoCamerasMessage(column) {
+  let msg = column.querySelector(".no-cameras-message");
+  const anyVisible = column.querySelector(".video-panel:not(.camera-hidden)");
+  if (anyVisible) {
+    if (msg) msg.remove();
+    return;
+  }
+  if (!msg) {
+    msg = document.createElement("p");
+    msg.className = "empty-state no-cameras-message";
+    msg.textContent = "All cameras hidden -- use the toggles above to show one.";
+    column.appendChild(msg);
+  }
 }
 
 async function setupCameras() {
@@ -205,21 +253,54 @@ async function setupCameras() {
   }
 
   column.innerHTML = "";
-  // A label overlay is only useful once there's more than one feed to tell
-  // apart -- the common single-camera case stays exactly as before.
-  const showLabels = cameras.length > 1;
+  // A label/toggle is only useful once there's more than one feed to tell
+  // apart or choose between -- the common single-camera case stays exactly
+  // as before, with no controls cluttering it.
+  const showControls = cameras.length > 1;
+  const hidden = loadHiddenCameras();
+
+  const toggles = document.createElement("div");
+  toggles.className = "camera-toggles";
+  if (showControls) column.appendChild(toggles);
+
   for (const cam of cameras) {
+    const camKey = cam.id ?? "default";
     const src = cam.id ? `/video_feed/${cam.id}` : "/video_feed";
+    const isHidden = showControls && hidden.has(camKey);
+
     const panel = document.createElement("section");
-    panel.className = "panel video-panel";
+    panel.className = "panel video-panel" + (isHidden ? " camera-hidden" : "");
     panel.innerHTML = `
-      ${showLabels ? `<span class="camera-label">${cam.name}</span>` : ""}
-      <img data-base-src="${src}" src="${src}" alt="${cam.name || "live camera feed"}" />
+      ${showControls ? `<span class="camera-label">${cam.name}</span>` : ""}
+      <img data-base-src="${src}" alt="${cam.name || "live camera feed"}" />
       <span class="live-badge"><span class="live-dot"></span>LIVE</span>
     `;
     column.appendChild(panel);
-    watchImageStream(panel.querySelector("img"));
+
+    const img = panel.querySelector("img");
+    if (!isHidden) img.src = src;
+    watchImageStream(img, panel);
+
+    if (showControls) {
+      const label = document.createElement("label");
+      label.className = "camera-toggle" + (isHidden ? "" : " active");
+      label.innerHTML = `<input type="checkbox" ${isHidden ? "" : "checked"} /> ${cam.name}`;
+      label.querySelector("input").addEventListener("change", (e) => {
+        const show = e.target.checked;
+        panel.classList.toggle("camera-hidden", !show);
+        label.classList.toggle("active", show);
+        img.src = show ? img.dataset.baseSrc + "?_=" + Date.now() : "";
+        const hiddenNow = loadHiddenCameras();
+        if (show) hiddenNow.delete(camKey);
+        else hiddenNow.add(camKey);
+        saveHiddenCameras(hiddenNow);
+        updateNoCamerasMessage(column);
+      });
+      toggles.appendChild(label);
+    }
   }
+
+  updateNoCamerasMessage(column);
 }
 
 function revealAdminLinkIfAvailable() {
