@@ -22,7 +22,10 @@ browser.
 3. `app/tracker.py` keeps per-plate bookkeeping (best OCR read so far, its DB
    row, its saved crop) keyed by that track ID, so a plate sitting in frame is
    only OCR'd (and logged) once, not on every processed frame.
-4. `app/ocr.py` crops each new plate and reads it with PaddleOCR (`th`),
+4. `app/ocr.py` crops each new plate, corrects in-plane rotation (a tilted
+   camera or crookedly mounted plate -- estimated from the dominant
+   near-horizontal edges via a Hough transform, not full perspective
+   correction) and upscales it, then reads it with PaddleOCR (`th`),
    discarding individual text segments below `OCR_MIN_SEGMENT_CONFIDENCE`
    instead of letting them drag down the whole read. The plate-number line is
    kept as read; anything below it is only kept if `app/thai_provinces.py`
@@ -130,7 +133,11 @@ See `.env.example` for the full list.
   covered by this check.
 - The plate detector is a general (non-Thai-specific) model — it localizes
   any rectangular plate; accuracy depends on camera angle, distance and
-  lighting like any single-model ALPR setup.
+  lighting like any single-model ALPR setup. In-plane rotation is corrected
+  before OCR (see above), but a plate viewed at a steep side/vertical angle
+  (true perspective distortion, not just rotation) is not -- that would need
+  locating all 4 corners of the plate and a full homography warp, not
+  attempted here.
 - ByteTrack is motion-aware but not infallible -- a plate can still get a new
   ID (logged as a second entry) after a long enough occlusion or gap between
   processed frames (raising `PROCESS_EVERY_N_FRAMES`'s frequency, i.e. lowering
