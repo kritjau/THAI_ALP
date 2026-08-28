@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 # tether, not WiFi -- the server this runs on is on a university network
 # with enterprise auth and likely client isolation, so a WiFi station
 # connection to the board wouldn't have been reachable anyway. One
-# long-lived connection is reused across calls; a lock guards it since the
-# OCR worker thread is the only caller today, but a stale/broken connection
-# after an unplug should still self-heal on the next call rather than wedge
-# permanently.
+# long-lived connection is reused across calls; a lock guards it since it's
+# shared between the OCR worker thread (open) and the timer thread below
+# (the automatic close), and a stale/broken connection after an unplug
+# should still self-heal on the next call rather than wedge permanently.
 _lock = threading.Lock()
 _conn: serial.Serial | None = None
 _warned_unconfigured = False
@@ -39,9 +39,35 @@ def _get_connection() -> serial.Serial | None:
         return None
 
 
-def open_gate(plate_text: str) -> bool:
-    """Sends the gate-open pulse command to the ESP32 board. See
+def _send_command(command: bytes, plate_text: str, action: str) -> bool:
+    """Sends one command line to the board and checks for an `OK` reply. See
     firmware/gate_relay/ for the board-side protocol."""
+    with _lock:
+        conn = _get_connection()
+        if conn is None:
+            return False
+        try:
+            conn.reset_input_buffer()
+            conn.write(command)
+            response = conn.readline().decode(errors="replace").strip()
+        except Exception:
+            logger.exception("Gate serial write/read failed for plate %r (%s)", plate_text, action)
+            conn.close()
+            global _conn
+            _conn = None  # force a fresh connection next time
+            return False
+
+    if response.startswith("OK"):
+        logger.info("Gate %s for plate %r (%s)", action, plate_text, response)
+        return True
+    logger.warning("Unexpected gate response %r for plate %r (%s)", response, plate_text, action)
+    return False
+
+
+def open_gate(plate_text: str) -> bool:
+    """Sends the gate-open pulse, then schedules the close pulse to follow
+    automatically after GATE_CLOSE_DELAY_SECONDS -- callers don't need to
+    call anything to close it back up."""
     global _warned_unconfigured
     if not settings.gate_serial_port:
         if not _warned_unconfigured:
@@ -53,23 +79,13 @@ def open_gate(plate_text: str) -> bool:
             _warned_unconfigured = True
         return False
 
-    with _lock:
-        conn = _get_connection()
-        if conn is None:
-            return False
-        try:
-            conn.reset_input_buffer()
-            conn.write(b"PULSE_OPEN\n")
-            response = conn.readline().decode(errors="replace").strip()
-        except Exception:
-            logger.exception("Gate serial write/read failed for plate %r", plate_text)
-            conn.close()
-            global _conn
-            _conn = None  # force a fresh connection next time
-            return False
+    opened = _send_command(b"PULSE_OPEN\n", plate_text, "opened")
+    if opened:
+        timer = threading.Timer(settings.gate_close_delay_seconds, _close_gate, args=(plate_text,))
+        timer.daemon = True
+        timer.start()
+    return opened
 
-        if response.startswith("OK"):
-            logger.info("Gate opened for registered plate %r (%s)", plate_text, response)
-            return True
-        logger.warning("Unexpected gate response %r for plate %r", response, plate_text)
-        return False
+
+def _close_gate(plate_text: str):
+    _send_command(b"PULSE_CLOSE\n", plate_text, "closed")
