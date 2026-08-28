@@ -16,6 +16,13 @@ def _env_float(name: str, default: float) -> float:
     return float(os.environ.get(name, default))
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
 @dataclass
 class Settings:
     camera_source: str = os.environ.get("CAMERA_SOURCE", "0")
@@ -51,6 +58,11 @@ class Settings:
     # Plate crops are small at driving distance; upscale before OCR so small Thai
     # glyphs (esp. the province line) have enough pixels to be read reliably.
     ocr_upscale_height: int = _env_int("OCR_UPSCALE_HEIGHT", 200)
+    # Corrects in-plane rotation (tilted camera/crooked plate) before OCR --
+    # not full perspective correction, see PlateReader._deskew(). A quick
+    # off-switch in case it ever proves to hurt more than it helps on real
+    # footage, without needing a code change to disable.
+    ocr_deskew_enabled: bool = _env_bool("OCR_DESKEW_ENABLED", True)
 
     models_dir: str = os.environ.get("MODELS_DIR", "models")
     captures_dir: str = os.environ.get("CAPTURES_DIR", "captures")

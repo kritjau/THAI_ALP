@@ -69,7 +69,10 @@ class PlateReader:
         if plate_crop is None or plate_crop.size == 0:
             return "", 0.0
 
-        result = self.reader.predict(self._upscale(plate_crop))
+        crop = plate_crop
+        if settings.ocr_deskew_enabled:
+            crop = self._deskew(crop)
+        result = self.reader.predict(self._upscale(crop))
         if not result:
             return "", 0.0
         page = result[0]
@@ -149,3 +152,62 @@ class PlateReader:
             return crop
         scale = target_h / h
         return cv2.resize(crop, (int(w * scale), target_h), interpolation=cv2.INTER_CUBIC)
+
+    @staticmethod
+    def _deskew(crop: np.ndarray) -> np.ndarray:
+        """Corrects in-plane rotation (a tilted camera, or a crookedly mounted
+        plate) before OCR -- not full perspective/keystone distortion, which
+        would need locating all 4 corners of the plate and a proper
+        homography warp; a tight detector crop with no clean background makes
+        that unreliable. Plain rotation covers the far more common real-world
+        case on CCTV footage, at much lower risk of making a read worse.
+
+        Estimates the tilt from the dominant near-horizontal line segments in
+        the crop (the plate's own top/bottom border, or the text baseline)
+        via a Hough transform, and falls back to the untouched crop if no
+        reliable line is found rather than guessing at an angle."""
+        h, w = crop.shape[:2]
+        if h == 0 or w == 0:
+            return crop
+
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        lines = cv2.HoughLinesP(
+            edges, 1, np.pi / 180, threshold=max(20, w // 6),
+            minLineLength=w * 0.4, maxLineGap=w * 0.1,
+        )
+        if lines is None:
+            return crop
+
+        angles = []
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            dx, dy = x2 - x1, y2 - y1
+            if dx == 0:
+                continue
+            angle = np.degrees(np.arctan2(dy, dx))
+            # Only near-horizontal lines are plausibly the plate's own
+            # edges/text baseline -- a near-vertical line is noise (a
+            # character stroke, a mounting screw, a border seam).
+            if abs(angle) <= 20:
+                angles.append(angle)
+
+        if not angles:
+            return crop
+
+        tilt = float(np.median(angles))
+        if abs(tilt) < 1.0:
+            return crop  # not worth a resample for a barely-there tilt
+
+        center = (w / 2, h / 2)
+        rotation_matrix = cv2.getRotationMatrix2D(center, tilt, 1.0)
+        # Expand the output canvas so rotating doesn't clip the plate's
+        # corners -- the crop is already tight, with little margin to spare.
+        cos, sin = abs(rotation_matrix[0, 0]), abs(rotation_matrix[0, 1])
+        new_w = int(h * sin + w * cos)
+        new_h = int(h * cos + w * sin)
+        rotation_matrix[0, 2] += (new_w - w) / 2
+        rotation_matrix[1, 2] += (new_h - h) / 2
+        return cv2.warpAffine(
+            crop, rotation_matrix, (new_w, new_h), borderMode=cv2.BORDER_REPLICATE
+        )
