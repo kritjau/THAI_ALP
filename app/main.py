@@ -9,7 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -29,9 +29,13 @@ _stop_event = threading.Event()
 def _with_image_url(item: dict) -> dict:
     """Adds a browser-usable `image` URL alongside the stored `image_path`,
     resolved to a fixed /captures/<filename> URL regardless of what
-    CAPTURES_DIR is actually named on disk."""
+    CAPTURES_DIR is actually named on disk. Detections loaded from the DB
+    (unlike a live pipeline event) don't carry a `registered` flag, since
+    the table itself doesn't store one -- checked fresh here instead, so it
+    reflects the current registered list even for old rows."""
     image_path = item.get("image_path")
     item["image"] = f"/captures/{Path(image_path).name}" if image_path else None
+    item.setdefault("registered", db.is_registered_plate(item["plate_text"]))
     return item
 
 
@@ -129,3 +133,28 @@ def api_detections(limit: int = 50):
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (static_dir / "index.html").read_text(encoding="utf-8")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page():
+    return (static_dir / "admin.html").read_text(encoding="utf-8")
+
+
+@app.get("/api/registered-plates")
+def api_list_registered_plates():
+    return db.list_registered_plates()
+
+
+@app.post("/api/registered-plates")
+def api_add_registered_plate(payload: dict = Body(...)):
+    plate_text = (payload.get("plate_text") or "").strip()
+    if not plate_text:
+        raise HTTPException(status_code=400, detail="plate_text is required")
+    db.add_registered_plate(plate_text, payload.get("label"))
+    return {"ok": True}
+
+
+@app.delete("/api/registered-plates/{plate_text}")
+def api_remove_registered_plate(plate_text: str):
+    db.remove_registered_plate(plate_text)
+    return {"ok": True}

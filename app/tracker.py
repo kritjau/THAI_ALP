@@ -12,6 +12,7 @@ class Track:
     color: str = ""
     last_ocr: float = 0.0
     logged: bool = False
+    gate_opened: bool = False
     db_id: int | None = None
     image_path: str | None = None
     last_seen: float = field(default_factory=time.time)

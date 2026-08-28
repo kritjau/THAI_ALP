@@ -104,3 +104,4 @@ def classify_color(vehicle_crop: np.ndarray | None, exclude_box: tuple[int, int,
 
     rgb = _dominant_color(region, mask=mask) or _dominant_color(region) or _dominant_color(vehicle_crop)
     return _classify(rgb) if rgb else "unknown"
+

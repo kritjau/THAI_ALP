@@ -348,6 +348,19 @@ tbody tr:hover {
   background: repeating-linear-gradient(45deg, #444 0, #444 2px, #333 2px, #333 4px);
 }
 
+.registered-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #0b0d12;
+  background: var(--accent);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+}
+
 .empty-state {
   margin: 0;
   padding: 1.5rem 1rem;

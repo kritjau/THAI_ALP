@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Registered Plates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/style.css" />
+<style>
+  main.admin-main {
+    display: block;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .add-form {
+    display: flex;
+    gap: 0.6rem;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .add-form input {
+    flex: 1;
+    min-width: 140px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  .add-form button, .remove-btn {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0.5rem 0.9rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .remove-btn {
+    background: transparent;
+    color: var(--danger);
+    padding: 0.3rem 0.6rem;
+  }
+  .remove-btn:hover { border-color: var(--danger); }
+  .back-link { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="brand-mark">Registered Plates</span>
+  </div>
+  <a class="back-link" href="/">&larr; Back to dashboard</a>
+</header>
+<main class="admin-main">
+  <section class="panel" style="margin: 1.25rem 1.75rem 2rem;">
+    <form class="add-form" id="add-form">
+      <input id="plate-input" type="text" placeholder="Plate text (e.g. 5กค 9834)" required />
+      <input id="label-input" type="text" placeholder="Label (optional, e.g. owner name)" />
+      <button type="submit">Add</button>
+    </form>
+    <div class="panel-header">
+      <h2>Registered</h2>
+      <span class="count-badge" id="plates-count">0</span>
+    </div>
+    <div class="table-scroll" style="min-height: 0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Plate</th>
+            <th>Label</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="plates-body"></tbody>
+      </table>
+      <p class="empty-state" id="plates-empty">No registered plates yet.</p>
+    </div>
+  </section>
+</main>
+<script>
+async function loadPlates() {
+  const res = await fetch("/api/registered-plates");
+  const plates = await res.json();
+  const body = document.getElementById("plates-body");
+  body.innerHTML = "";
+  for (const p of plates) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td class="plate">${p.plate_text}</td>
+      <td>${p.label || ""}</td>
+      <td><button class="remove-btn" data-plate="${p.plate_text}">Remove</button></td>
+    `;
+    body.appendChild(row);
+  }
+  document.getElementById("plates-count").textContent = plates.length;
+  document.getElementById("plates-empty").style.display = plates.length ? "none" : "block";
+}
+
+document.getElementById("add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const plateInput = document.getElementById("plate-input");
+  const labelInput = document.getElementById("label-input");
+  const plate_text = plateInput.value.trim();
+  if (!plate_text) return;
+  await fetch("/api/registered-plates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plate_text, label: labelInput.value.trim() || null }),
+  });
+  plateInput.value = "";
+  labelInput.value = "";
+  loadPlates();
+});
+
+document.getElementById("plates-body").addEventListener("click", async (e) => {
+  if (!e.target.matches(".remove-btn")) return;
+  await fetch(`/api/registered-plates/${encodeURIComponent(e.target.dataset.plate)}`, {
+    method: "DELETE",
+  });
+  loadPlates();
+});
+
+loadPlates();
+</script>
+</body>
+</html>
