@@ -118,17 +118,26 @@ class CameraWorker:
         track.last_ocr = time.time()
 
         # Discard noise (motion blur, false-positive detections without Thai
-        # script, a plate number that doesn't match any real Thai plate
-        # shape) and don't overwrite an already-logged plate with a worse
-        # read -- driving footage re-OCRs the same persisting track every
-        # few seconds.
-        if (
-            not text
-            or ocr_conf < settings.min_log_confidence
-            or not looks_like_thai_plate(text)
-            or not looks_like_valid_plate_number(normalize_plate(text))
-        ):
+        # script) -- silently, these are expected and frequent enough that
+        # logging every one would just be noise.
+        if not text or ocr_conf < settings.min_log_confidence or not looks_like_thai_plate(text):
             return
+
+        # Unlike the above, a read with Thai script and reasonable confidence
+        # that still doesn't match a plausible plate shape is worth surfacing
+        # -- it's evidence for whether OCR accuracy needs a bigger fix (e.g.
+        # perspective correction on the crop before OCR) or whether this
+        # shape check alone is already catching most of what would otherwise
+        # have been a bad read.
+        normalized = normalize_plate(text)
+        if not looks_like_valid_plate_number(normalized):
+            logger.info(
+                "Camera %s track %s: rejected %r (normalized %r, conf %.2f) -- "
+                "doesn't match a plausible Thai plate shape",
+                self.camera_id, track_id, text, normalized, ocr_conf,
+            )
+            return
+
         if track.logged and ocr_conf <= track.confidence:
             return
 
