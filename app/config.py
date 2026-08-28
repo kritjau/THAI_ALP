@@ -82,10 +82,44 @@ class Settings:
 
     def camera_source_value(self):
         """Local webcams are given as an integer index; RTSP/HTTP/file sources stay strings."""
+        return self._resolve_source(self.camera_source)
+
+    @staticmethod
+    def _resolve_source(value: str):
         try:
-            return int(self.camera_source)
+            return int(value)
         except ValueError:
-            return self.camera_source
+            return value
+
+    def camera_configs(self) -> list[dict]:
+        """CAMERA_SOURCE is camera "1"; CAMERA_SOURCE_2, CAMERA_SOURCE_3, ...
+        add more (with an optional CAMERA_NAME_N label each) for testing
+        against multiple feeds side by side -- numbered .env keys rather than
+        one JSON/CSV value so adding a camera is just one more plain line.
+        Re-reads os.environ each call (like camera_source_value() effectively
+        does) rather than being fixed at import time, so tests can monkeypatch
+        environ without needing a fresh Settings instance."""
+        configs = [
+            {
+                "id": "1",
+                "name": os.environ.get("CAMERA_NAME_1", "Camera 1"),
+                "source": self.camera_source_value(),
+            }
+        ]
+        i = 2
+        while True:
+            source = os.environ.get(f"CAMERA_SOURCE_{i}")
+            if not source:
+                break
+            configs.append(
+                {
+                    "id": str(i),
+                    "name": os.environ.get(f"CAMERA_NAME_{i}", f"Camera {i}"),
+                    "source": self._resolve_source(source),
+                }
+            )
+            i += 1
+        return configs
 
 
 settings = Settings()

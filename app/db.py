@@ -44,34 +44,48 @@ def init_db():
                 conn.execute("ALTER TABLE detections RENAME COLUMN vehicle_color TO color")
             else:
                 conn.execute("ALTER TABLE detections ADD COLUMN color TEXT")
+        # Migration for DBs created before multi-camera support -- existing
+        # rows all predate it and get NULL, which the dashboard shows as
+        # "Camera 1" (the only camera a single-camera setup ever had).
+        if "camera_id" not in existing_cols:
+            conn.execute("ALTER TABLE detections ADD COLUMN camera_id TEXT")
+        if "camera_name" not in existing_cols:
+            conn.execute("ALTER TABLE detections ADD COLUMN camera_name TEXT")
 
 
-def insert_detection(plate_text, confidence, bbox, image_path=None, timestamp=None, color=None) -> int:
+def insert_detection(
+    plate_text, confidence, bbox, image_path=None, timestamp=None, color=None,
+    camera_id=None, camera_name=None,
+) -> int:
     ts = timestamp if timestamp is not None else time.time()
     with _connect() as conn:
         cur = conn.execute(
-            "INSERT INTO detections (timestamp, plate_text, confidence, bbox, image_path, color) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (ts, plate_text, confidence, ",".join(map(str, bbox)), image_path, color),
+            "INSERT INTO detections (timestamp, plate_text, confidence, bbox, image_path, color, "
+            "camera_id, camera_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (ts, plate_text, confidence, ",".join(map(str, bbox)), image_path, color, camera_id, camera_name),
         )
         return cur.lastrowid
 
 
-def update_detection(detection_id, plate_text, confidence, bbox, image_path=None, timestamp=None, color=None):
+def update_detection(
+    detection_id, plate_text, confidence, bbox, image_path=None, timestamp=None, color=None,
+    camera_id=None, camera_name=None,
+):
     ts = timestamp if timestamp is not None else time.time()
     with _connect() as conn:
         conn.execute(
             "UPDATE detections SET timestamp = ?, plate_text = ?, confidence = ?, "
-            "bbox = ?, image_path = ?, color = ? WHERE id = ?",
-            (ts, plate_text, confidence, ",".join(map(str, bbox)), image_path, color, detection_id),
+            "bbox = ?, image_path = ?, color = ?, camera_id = ?, camera_name = ? WHERE id = ?",
+            (ts, plate_text, confidence, ",".join(map(str, bbox)), image_path, color,
+             camera_id, camera_name, detection_id),
         )
 
 
 def recent_detections(limit: int = 50) -> list[dict]:
     with _connect() as conn:
         cur = conn.execute(
-            "SELECT id, timestamp, plate_text, confidence, bbox, image_path, color "
-            "FROM detections ORDER BY id DESC LIMIT ?",
+            "SELECT id, timestamp, plate_text, confidence, bbox, image_path, color, "
+            "camera_id, camera_name FROM detections ORDER BY id DESC LIMIT ?",
             (limit,),
         )
         rows = cur.fetchall()
@@ -84,6 +98,11 @@ def recent_detections(limit: int = 50) -> list[dict]:
             "bbox": r[4],
             "image_path": r[5],
             "color": r[6],
+            "camera_id": r[7],
+            # Rows logged before multi-camera support have no camera_name --
+            # they all came from what is now "Camera 1", the only camera a
+            # single-camera setup ever had.
+            "camera_name": r[8] or "Camera 1",
         }
         for r in rows
     ]

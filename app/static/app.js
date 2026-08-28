@@ -35,9 +35,17 @@ function registeredBadge(det) {
   return det.registered ? ' <span class="registered-badge">GATE</span>' : "";
 }
 
+function cameraTag(det) {
+  // Events from before multi-camera support (or a single-camera setup)
+  // don't carry camera_name -- falls back to the only camera such a setup
+  // ever had, matching db.py's recent_detections() fallback.
+  return det.camera_name || "Camera 1";
+}
+
 function upsertRow(body, det) {
   const cells = `
     <td>${formatTime(det.timestamp)}</td>
+    <td class="camera-tag">${cameraTag(det)}</td>
     <td class="plate">${det.plate_text}${registeredBadge(det)}</td>
     <td>${Math.round(det.confidence * 100)}%</td>
     <td>${colorSwatch(det.color)}</td>
@@ -84,7 +92,7 @@ function upsertCapture(grid, det) {
     <div class="capture-caption">
       <span class="plate">${det.plate_text}${registeredBadge(det)}</span>
       <span class="capture-meta">
-        ${formatTime(det.timestamp)}
+        ${formatTime(det.timestamp)} &middot; ${cameraTag(det)}
         ${det.color ? `<span class="swatch" style="background:${COLOR_SWATCHES[det.color] || "#666"}"></span>` : ""}
       </span>
     </div>
@@ -155,18 +163,18 @@ function connectWebSocket() {
   };
 }
 
-function watchVideoFeed() {
+function watchImageStream(img) {
   // The video is a plain <img> pulling a multipart/x-mixed-replace stream,
   // which browsers don't auto-retry -- unlike the WebSocket above, a dropped
   // or silently stalled connection here just stays blank forever without
   // this. `load` fires on every new frame, so a long gap since the last one
   // means the stream died without the browser noticing via `error`.
-  const img = document.getElementById("video-feed");
+  const baseSrc = img.dataset.baseSrc;
   let lastFrameAt = Date.now();
 
   const reload = () => {
     lastFrameAt = Date.now();
-    img.src = "/video_feed?_=" + Date.now();
+    img.src = baseSrc + "?_=" + Date.now();
   };
 
   img.addEventListener("load", () => {
@@ -181,6 +189,39 @@ function watchVideoFeed() {
   }, 3000);
 }
 
+async function setupCameras() {
+  const column = document.getElementById("video-column");
+  let cameras = [];
+  try {
+    const res = await fetch("/api/cameras");
+    if (res.ok) cameras = await res.json();
+  } catch (err) {
+    // fall through to the single-camera fallback below
+  }
+  if (!cameras || cameras.length === 0) {
+    // /api/cameras came back empty or unavailable -- fall back to the
+    // original single, unlabeled /video_feed rather than showing nothing.
+    cameras = [{ id: null, name: null }];
+  }
+
+  column.innerHTML = "";
+  // A label overlay is only useful once there's more than one feed to tell
+  // apart -- the common single-camera case stays exactly as before.
+  const showLabels = cameras.length > 1;
+  for (const cam of cameras) {
+    const src = cam.id ? `/video_feed/${cam.id}` : "/video_feed";
+    const panel = document.createElement("section");
+    panel.className = "panel video-panel";
+    panel.innerHTML = `
+      ${showLabels ? `<span class="camera-label">${cam.name}</span>` : ""}
+      <img data-base-src="${src}" src="${src}" alt="${cam.name || "live camera feed"}" />
+      <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+    `;
+    column.appendChild(panel);
+    watchImageStream(panel.querySelector("img"));
+  }
+}
+
 function revealAdminLinkIfAvailable() {
   // Shared by app/ (no gate feature -- doesn't have this route) and
   // app_live/ (does) -- only show the link where it'll actually work.
@@ -193,5 +234,5 @@ function revealAdminLinkIfAvailable() {
 
 loadHistory();
 connectWebSocket();
-watchVideoFeed();
+setupCameras();
 revealAdminLinkIfAvailable();

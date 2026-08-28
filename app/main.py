@@ -38,7 +38,10 @@ def _with_image_url(item: dict) -> dict:
 def _processing_loop():
     global _pipeline
     _pipeline = ALPRPipeline()
-    logger.info("ALPR pipeline started (camera source=%r)", settings.camera_source)
+    logger.info(
+        "ALPR pipeline started (%d camera(s): %s)",
+        len(_pipeline.cameras), [c.name for c in _pipeline.cameras],
+    )
     while not _stop_event.is_set():
         try:
             for event in _pipeline.step():
@@ -89,12 +92,12 @@ Path(settings.captures_dir).mkdir(parents=True, exist_ok=True)
 app.mount("/captures", StaticFiles(directory=settings.captures_dir), name="captures")
 
 
-def _mjpeg_generator():
+def _mjpeg_generator(camera_id: str | None):
     while True:
         if _pipeline is None:
             time.sleep(0.1)
             continue
-        frame_bytes = _pipeline.latest_jpeg()
+        frame_bytes = _pipeline.latest_jpeg(camera_id)
         if frame_bytes is None:
             time.sleep(0.1)
             continue
@@ -104,9 +107,24 @@ def _mjpeg_generator():
 
 @app.get("/video_feed")
 def video_feed():
+    """Kept as the first/primary camera for backward compatibility (existing
+    bookmarks, a single-camera .env) -- /video_feed/{camera_id} is what a
+    multi-camera dashboard actually uses."""
     return StreamingResponse(
-        _mjpeg_generator(), media_type="multipart/x-mixed-replace; boundary=frame"
+        _mjpeg_generator(None), media_type="multipart/x-mixed-replace; boundary=frame"
     )
+
+
+@app.get("/video_feed/{camera_id}")
+def video_feed_by_camera(camera_id: str):
+    return StreamingResponse(
+        _mjpeg_generator(camera_id), media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+@app.get("/api/cameras")
+def api_cameras():
+    return _pipeline.camera_list() if _pipeline else []
 
 
 @app.websocket("/ws/detections")
