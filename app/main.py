@@ -92,17 +92,25 @@ Path(settings.captures_dir).mkdir(parents=True, exist_ok=True)
 app.mount("/captures", StaticFiles(directory=settings.captures_dir), name="captures")
 
 
-def _mjpeg_generator(camera_id: str | None):
+async def _mjpeg_generator(camera_id: str | None):
+    # async, not a plain generator: Starlette runs a sync generator's each-
+    # next() call in its (limited-size) request threadpool, and a
+    # StreamingResponse holds that generator open for the connection's whole
+    # lifetime -- so every open video stream would permanently pin one
+    # threadpool worker, and enough concurrent/stale connections (dashboard
+    # reconnects, multiple tabs) starve that pool outright, hanging even
+    # unrelated endpoints. An async generator yields control back to the
+    # event loop on every `await` instead.
     while True:
         if _pipeline is None:
-            time.sleep(0.1)
+            await asyncio.sleep(0.1)
             continue
         frame_bytes = _pipeline.latest_jpeg(camera_id)
         if frame_bytes is None:
-            time.sleep(0.1)
+            await asyncio.sleep(0.1)
             continue
         yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
-        time.sleep(0.05)
+        await asyncio.sleep(0.05)
 
 
 @app.get("/video_feed")
