@@ -16,6 +16,10 @@ class Track:
     db_id: int | None = None
     image_path: str | None = None
     last_seen: float = field(default_factory=time.time)
+    # Recent (text, confidence) reads for this track, used to majority-vote a
+    # stable plate_text instead of trusting any single frame's read -- see
+    # plate_match.vote_plate_text().
+    read_history: list = field(default_factory=list)
 
 
 class PlateTracker:
