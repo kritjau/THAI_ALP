@@ -13,11 +13,16 @@ from .config import settings
 from .detector import PlateDetector
 from .ocr import PlateReader, looks_like_thai_plate
 from .plate_format import looks_like_valid_plate_number
-from .plate_match import normalize_plate
+from .plate_match import normalize_plate, vote_plate_text
 from .tracker import PlateTracker
 from .vehicle_detector import VehicleDetector
 
 logger = logging.getLogger(__name__)
+
+# Reads kept per track for majority voting (see plate_match.vote_plate_text)
+# -- capped so a plate that lingers a long time doesn't let stale early
+# reads outvote what the camera is seeing now.
+MAX_READ_HISTORY = 5
 
 
 class CameraWorker:
@@ -138,8 +143,13 @@ class CameraWorker:
             )
             return
 
-        if track.logged and ocr_conf <= track.confidence:
-            return
+        track.read_history.append((text, ocr_conf))
+        if len(track.read_history) > MAX_READ_HISTORY:
+            track.read_history.pop(0)
+        voted_text, voted_conf = vote_plate_text(track.read_history)
+
+        if track.logged and voted_text == track.plate_text:
+            return  # this read didn't change the voted-consensus text
 
         vehicle_boxes = self.vehicle_detector.detect(frame)
         vehicle_box = VehicleDetector.find_containing(vehicle_boxes, box)
@@ -152,13 +162,13 @@ class CameraWorker:
         color = classify_color(vehicle_crop, exclude_box=plate_in_vehicle)
 
         was_logged_before = track.logged
-        track.plate_text = text
-        track.confidence = ocr_conf
+        track.plate_text = voted_text
+        track.confidence = voted_conf
         track.color = color
         track.logged = True
 
         self._on_new_read(
-            self, track_id, track, (x1, y1, x2, y2), crop, text, ocr_conf, color, was_logged_before
+            self, track_id, track, (x1, y1, x2, y2), crop, voted_text, voted_conf, color, was_logged_before
         )
 
     def _draw(self, frame):

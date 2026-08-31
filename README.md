@@ -32,14 +32,21 @@ browser.
    fuzzy-matches it to one of Thailand's 77 real provinces (correcting it to
    the canonical spelling) -- this filters out non-province text a plate frame
    or holder often has printed on it (dealer/district branding).
-5. `app/db.py` logs each new read (timestamp, text, confidence, crop) to SQLite
+5. `app/tracker.py` keeps the last several reads of the same track and
+   `app/plate_match.py:vote_plate_text()` majority-votes a stable plate text
+   character-by-character (confidence-weighted) instead of trusting any
+   single frame -- OCR occasionally confuses visually similar Thai
+   consonants (e.g. ค/ต/ด) on one frame, but the correct character is
+   usually the plurality across the handful of reads a plate gets while it's
+   in view, at no extra OCR cost since those reads already happen for re-OCR.
+6. `app/db.py` logs each new read (timestamp, text, confidence, crop) to SQLite
    at `data/alpr.db`, refining the row in place if a better read of the same
    plate comes in while it's still in frame.
-6. `app/json_export.py` buffers reads deduplicated by plate text and, every
+7. `app/json_export.py` buffers reads deduplicated by plate text and, every
    `JSON_EXPORT_INTERVAL_SECONDS` (default 20s), writes a timestamped snapshot
    file to `json/interval_<timestamp>.json` plus updates `json/plates_cumulative.json`,
    which merges every unique plate ever seen across all intervals.
-7. `app/main.py` (FastAPI) serves the annotated stream at `/video_feed` and
+8. `app/main.py` (FastAPI) serves the annotated stream at `/video_feed` and
    pushes new detections over a WebSocket to the dashboard at `/`.
 
 ## Multiple cameras
@@ -55,6 +62,73 @@ which feed saw it. Each camera gets its own detector/tracker/OCR model
 instances (ByteTrack's tracker state, in particular, can't be shared across
 streams), so this is real added CPU/GPU/RAM cost per camera, not just a
 display change.
+
+## Remote camera source (on a different machine/network than the server)
+
+If a camera (webcam or IP camera) is attached to a machine that isn't the
+server itself -- e.g. your own laptop/PC on a different network than the
+deployment server -- expose it as a pullable stream on that machine, then
+reverse-tunnel it to the server over SSH. The server-side `CAMERA_SOURCE_N`
+then just points at `127.0.0.1:<forwarded-port>`, unaware of where the feed
+actually originates.
+
+### Webcam
+
+On the source machine, serve it as MJPEG over HTTP -- ffmpeg's `-listen 1`
+mode only serves ONE connection per launch, so wrap it in a restart loop:
+
+```bash
+# Linux
+while true; do
+    ffmpeg -f v4l2 -i /dev/video0 -f mjpeg -listen 1 http://0.0.0.0:8080/webcam.mjpg
+    sleep 1
+done
+```
+
+```powershell
+# Windows -- dshow instead of v4l2; list device names first with
+# `ffmpeg -list_devices true -f dshow -i dummy`. OpenSSH client (for the
+# tunnel below) is built into Windows 10/11, no install needed.
+while ($true) {
+    ffmpeg -f dshow -i video="Integrated Camera" -f mjpeg -listen 1 http://127.0.0.1:8080/webcam.mjpg
+}
+```
+
+Then tunnel it to the server:
+
+```bash
+ssh -N -R 18080:127.0.0.1:8080 user@server
+```
+
+Server `.env`: `CAMERA_SOURCE_2=http://127.0.0.1:18080/webcam.mjpg`
+
+### IP camera (e.g. Hikvision) on the source machine's LAN port
+
+1. Give that machine's Ethernet adapter a static IP on the camera's subnet
+   (Hikvision default is `192.168.1.64/24`):
+   ```bash
+   nmcli connection modify "<profile>" ipv4.method manual ipv4.addresses 192.168.1.100/24   # Linux
+   ```
+   ```powershell
+   New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 192.168.1.100 -PrefixLength 24    # Windows
+   ```
+2. If factory-fresh, activate it (set an admin password) via the camera's web
+   UI at `http://192.168.1.64`, or Hikvision's SADP tool on Windows.
+3. Tunnel -- forwarded to the *camera's* IP, not localhost, since the camera
+   isn't the machine running `ssh`:
+   ```bash
+   ssh -N -R 8554:192.168.1.64:554 user@server
+   ```
+4. Server `.env`: `CAMERA_SOURCE_2=rtsp://admin:<password>@127.0.0.1:8554/Streaming/Channels/102`
+5. RTSP's media stream is normally separate UDP traffic that can't ride a
+   single forwarded TCP port -- if the feed doesn't come through, force TCP
+   transport on the server:
+   ```bash
+   export OPENCV_FFMPEG_CAPTURE_OPTIONS="rtsp_transport;tcp"
+   ```
+
+Both the ffmpeg loop and the SSH tunnel need to keep running continuously on
+the source machine -- closing either drops the feed.
 
 ## Setup
 
