@@ -25,6 +25,28 @@ logger = logging.getLogger(__name__)
 MAX_READ_HISTORY = 5
 
 
+def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker"]:
+    """Builds one CameraWorker per config, skipping (and logging) any whose
+    source fails to open instead of letting one bad/offline camera take
+    down every other camera too. Without this, a plain list comprehension
+    over CameraWorker(...) lets one flaky/offline source (e.g. a dropped SSH
+    tunnel) raise mid-construction and abort the whole pipeline -- observed
+    in practice: an offline tunneled webcam killed the background pipeline
+    thread outright, leaving *no* camera (including otherwise-healthy ones)
+    and an empty /api/cameras indefinitely, since nothing restarts that
+    thread on its own."""
+    cameras = []
+    for cfg in configs:
+        try:
+            cameras.append(CameraWorker(cfg["id"], cfg["name"], cfg["source"], on_new_read))
+        except Exception:
+            logger.exception(
+                "Camera %s (%s) failed to start -- skipping it, other cameras continue",
+                cfg["id"], cfg["name"],
+            )
+    return cameras
+
+
 class CameraWorker:
     """One camera's full detect -> track -> OCR pipeline: its own camera read
     thread, plate detector (ByteTrack's tracker state is per-model-instance,

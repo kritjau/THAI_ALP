@@ -8,7 +8,7 @@ import time
 import cv2
 
 from app import registered_plates_db
-from app.camera_worker import CameraWorker
+from app.camera_worker import CameraWorker, build_camera_workers
 from app.config import settings
 from app.gate import open_gate
 
@@ -53,10 +53,7 @@ class LiveOnlyPipeline:
         # by the OCR worker threads below (one per camera, but each key is
         # only ever written by its own camera's thread), so no lock needed.
         self._recent_plates: dict[tuple[str, str], float] = {}
-        self.cameras = [
-            CameraWorker(cfg["id"], cfg["name"], cfg["source"], self._on_new_read)
-            for cfg in settings.camera_configs()
-        ]
+        self.cameras = build_camera_workers(settings.camera_configs(), self._on_new_read)
         self._cameras_by_id = {cam.camera_id: cam for cam in self.cameras}
 
     def step(self) -> list[dict]:
