@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 
 from . import db
-from .camera_worker import CameraWorker
+from .camera_worker import CameraWorker, build_camera_workers
 from .config import settings
 from .json_export import JsonExporter
 
@@ -22,10 +22,7 @@ class ALPRPipeline:
         Path(settings.captures_dir).mkdir(parents=True, exist_ok=True)
         self.json_exporter = JsonExporter()
         self._new_events: queue.Queue = queue.Queue()
-        self.cameras = [
-            CameraWorker(cfg["id"], cfg["name"], cfg["source"], self._on_new_read)
-            for cfg in settings.camera_configs()
-        ]
+        self.cameras = build_camera_workers(settings.camera_configs(), self._on_new_read)
         self._cameras_by_id = {cam.camera_id: cam for cam in self.cameras}
 
     def step(self) -> list[dict]:
