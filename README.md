@@ -39,14 +39,22 @@ browser.
    consonants (e.g. ค/ต/ด) on one frame, but the correct character is
    usually the plurality across the handful of reads a plate gets while it's
    in view, at no extra OCR cost since those reads already happen for re-OCR.
-6. `app/db.py` logs each new read (timestamp, text, confidence, crop) to SQLite
-   at `data/alpr.db`, refining the row in place if a better read of the same
-   plate comes in while it's still in frame.
-7. `app/json_export.py` buffers reads deduplicated by plate text and, every
+6. `app/vehicle_detector.py` runs a second, stock COCO-pretrained YOLOv11
+   (`yolo11n.pt`, no fine-tuning) over the same frame to find the vehicle body
+   the plate belongs to (the smallest detected vehicle box containing the
+   plate's center) -- this gives two things for free from a class COCO
+   already predicts: the vehicle type (car/motorcycle/bus/truck) as-is, and
+   the vehicle crop `app/color.py` samples (masking out the plate's own
+   pixels) to classify its dominant color via k-means + HSV rules.
+7. `app/db.py` logs each new read (timestamp, text, confidence, color,
+   vehicle type, crop) to SQLite at `data/alpr.db`, refining the row in
+   place if a better read of the same plate comes in while it's still in
+   frame.
+8. `app/json_export.py` buffers reads deduplicated by plate text and, every
    `JSON_EXPORT_INTERVAL_SECONDS` (default 20s), writes a timestamped snapshot
    file to `json/interval_<timestamp>.json` plus updates `json/plates_cumulative.json`,
    which merges every unique plate ever seen across all intervals.
-8. `app/main.py` (FastAPI) serves the annotated stream at `/video_feed` and
+9. `app/main.py` (FastAPI) serves the annotated stream at `/video_feed` and
    pushes new detections over a WebSocket to the dashboard at `/`.
 
 ## Multiple cameras

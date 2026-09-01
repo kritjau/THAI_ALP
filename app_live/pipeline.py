@@ -61,7 +61,9 @@ class LiveOnlyPipeline:
             cam.step()
         return self._drain_events()
 
-    def _on_new_read(self, worker, track_id, track, box, crop, text, ocr_conf, color, was_logged_before):
+    def _on_new_read(
+        self, worker, track_id, track, box, crop, text, ocr_conf, color, vehicle_type, was_logged_before
+    ):
         now = time.time()
         # Only a track's *first* successful read is a "new sighting" --
         # later re-OCRs of the same track are refinements and should
@@ -89,6 +91,7 @@ class LiveOnlyPipeline:
                     "plate_text": text,
                     "confidence": ocr_conf,
                     "color": color,
+                    "vehicle_type": vehicle_type,
                     "bbox": list(box),
                     "timestamp": now,
                     "image": _as_data_uri(crop),
