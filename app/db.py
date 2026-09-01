@@ -51,33 +51,38 @@ def init_db():
             conn.execute("ALTER TABLE detections ADD COLUMN camera_id TEXT")
         if "camera_name" not in existing_cols:
             conn.execute("ALTER TABLE detections ADD COLUMN camera_name TEXT")
+        # Migration for DBs created before vehicle-type classification --
+        # existing rows simply have no type, shown by the dashboard as "?".
+        if "vehicle_type" not in existing_cols:
+            conn.execute("ALTER TABLE detections ADD COLUMN vehicle_type TEXT")
 
 
 def insert_detection(
     plate_text, confidence, bbox, image_path=None, timestamp=None, color=None,
-    camera_id=None, camera_name=None,
+    vehicle_type=None, camera_id=None, camera_name=None,
 ) -> int:
     ts = timestamp if timestamp is not None else time.time()
     with _connect() as conn:
         cur = conn.execute(
             "INSERT INTO detections (timestamp, plate_text, confidence, bbox, image_path, color, "
-            "camera_id, camera_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (ts, plate_text, confidence, ",".join(map(str, bbox)), image_path, color, camera_id, camera_name),
+            "vehicle_type, camera_id, camera_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (ts, plate_text, confidence, ",".join(map(str, bbox)), image_path, color,
+             vehicle_type, camera_id, camera_name),
         )
         return cur.lastrowid
 
 
 def update_detection(
     detection_id, plate_text, confidence, bbox, image_path=None, timestamp=None, color=None,
-    camera_id=None, camera_name=None,
+    vehicle_type=None, camera_id=None, camera_name=None,
 ):
     ts = timestamp if timestamp is not None else time.time()
     with _connect() as conn:
         conn.execute(
             "UPDATE detections SET timestamp = ?, plate_text = ?, confidence = ?, "
-            "bbox = ?, image_path = ?, color = ?, camera_id = ?, camera_name = ? WHERE id = ?",
+            "bbox = ?, image_path = ?, color = ?, vehicle_type = ?, camera_id = ?, camera_name = ? WHERE id = ?",
             (ts, plate_text, confidence, ",".join(map(str, bbox)), image_path, color,
-             camera_id, camera_name, detection_id),
+             vehicle_type, camera_id, camera_name, detection_id),
         )
 
 
@@ -85,7 +90,7 @@ def recent_detections(limit: int = 50) -> list[dict]:
     with _connect() as conn:
         cur = conn.execute(
             "SELECT id, timestamp, plate_text, confidence, bbox, image_path, color, "
-            "camera_id, camera_name FROM detections ORDER BY id DESC LIMIT ?",
+            "vehicle_type, camera_id, camera_name FROM detections ORDER BY id DESC LIMIT ?",
             (limit,),
         )
         rows = cur.fetchall()
@@ -98,11 +103,12 @@ def recent_detections(limit: int = 50) -> list[dict]:
             "bbox": r[4],
             "image_path": r[5],
             "color": r[6],
-            "camera_id": r[7],
+            "vehicle_type": r[7],
+            "camera_id": r[8],
             # Rows logged before multi-camera support have no camera_name --
             # they all came from what is now "Camera 1", the only camera a
             # single-camera setup ever had.
-            "camera_name": r[8] or "Camera 1",
+            "camera_name": r[9] or "Camera 1",
         }
         for r in rows
     ]

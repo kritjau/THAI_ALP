@@ -58,7 +58,7 @@ class CameraWorker:
     DB vs. check the gate whitelist) is left to the `on_new_read` callback.
 
     on_new_read(worker, track_id, track, box, crop, text, ocr_conf, color,
-    was_logged_before) is called from this camera's own OCR worker thread
+    vehicle_type, was_logged_before) is called from this camera's own OCR worker thread
     for every read that passes the confidence/plausibility filters.
     `was_logged_before` is `track.logged` from *before* this call updates
     it, i.e. whether this is the track's first successful read (a new
@@ -177,8 +177,9 @@ class CameraWorker:
         vehicle_box = VehicleDetector.find_containing(vehicle_boxes, box)
         vehicle_crop = None
         plate_in_vehicle = None
+        vehicle_type = ""
         if vehicle_box:
-            vx1, vy1, vx2, vy2 = vehicle_box
+            (vx1, vy1, vx2, vy2), vehicle_type = vehicle_box
             vehicle_crop = frame[vy1:vy2, vx1:vx2]
             plate_in_vehicle = (x1 - vx1, y1 - vy1, x2 - vx1, y2 - vy1)
         color = classify_color(vehicle_crop, exclude_box=plate_in_vehicle)
@@ -187,10 +188,12 @@ class CameraWorker:
         track.plate_text = voted_text
         track.confidence = voted_conf
         track.color = color
+        track.vehicle_type = vehicle_type
         track.logged = True
 
         self._on_new_read(
-            self, track_id, track, (x1, y1, x2, y2), crop, voted_text, voted_conf, color, was_logged_before
+            self, track_id, track, (x1, y1, x2, y2), crop, voted_text, voted_conf, color,
+            vehicle_type, was_logged_before,
         )
 
     def _draw(self, frame):

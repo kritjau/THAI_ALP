@@ -42,6 +42,14 @@ function cameraTag(det) {
   return det.camera_name || "Camera 1";
 }
 
+// Capitalizes the vehicle_type label from app/vehicle_detector.py
+// ("motorcycle" -> "Motorcycle"); no type (older rows, or no vehicle body
+// found for this plate) shows as "?" rather than blank.
+function vehicleTypeLabel(det) {
+  if (!det.vehicle_type) return "?";
+  return det.vehicle_type.charAt(0).toUpperCase() + det.vehicle_type.slice(1);
+}
+
 function upsertRow(body, det) {
   const cells = `
     <td>${formatTime(det.timestamp)}</td>
@@ -49,6 +57,7 @@ function upsertRow(body, det) {
     <td class="plate">${det.plate_text}${registeredBadge(det)}</td>
     <td>${Math.round(det.confidence * 100)}%</td>
     <td>${colorSwatch(det.color)}</td>
+    <td>${vehicleTypeLabel(det)}</td>
   `;
 
   const existing = rowsById.get(det.id);
@@ -93,6 +102,7 @@ function upsertCapture(grid, det) {
       <span class="plate">${det.plate_text}${registeredBadge(det)}</span>
       <span class="capture-meta">
         ${formatTime(det.timestamp)} &middot; ${cameraTag(det)}
+        ${det.vehicle_type ? `&middot; ${vehicleTypeLabel(det)}` : ""}
         ${det.color ? `<span class="swatch" style="background:${COLOR_SWATCHES[det.color] || "#666"}"></span>` : ""}
       </span>
     </div>

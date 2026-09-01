@@ -31,23 +31,25 @@ class ALPRPipeline:
         self.json_exporter.maybe_flush()
         return self._drain_events()
 
-    def _on_new_read(self, worker, _track_id, track, box, crop, text, ocr_conf, color, was_logged_before):
+    def _on_new_read(
+        self, worker, _track_id, track, box, crop, text, ocr_conf, color, vehicle_type, was_logged_before
+    ):
         image_path = self._save_crop(crop, text)
         if was_logged_before:
             db.update_detection(
                 track.db_id, text, ocr_conf, box, image_path,
-                color=color, camera_id=worker.camera_id, camera_name=worker.name,
+                color=color, vehicle_type=vehicle_type, camera_id=worker.camera_id, camera_name=worker.name,
             )
             self._delete_crop(track.image_path)
         else:
             track.db_id = db.insert_detection(
                 text, ocr_conf, box, image_path,
-                color=color, camera_id=worker.camera_id, camera_name=worker.name,
+                color=color, vehicle_type=vehicle_type, camera_id=worker.camera_id, camera_name=worker.name,
             )
         track.image_path = image_path
         self.json_exporter.record(
             text, ocr_conf, image_path,
-            color=color,
+            color=color, vehicle_type=vehicle_type,
         )
         self._new_events.put(
             {
@@ -57,6 +59,7 @@ class ALPRPipeline:
                 "plate_text": text,
                 "confidence": ocr_conf,
                 "color": color,
+                "vehicle_type": vehicle_type,
                 "bbox": list(box),
                 "timestamp": time.time(),
                 "image_path": image_path,

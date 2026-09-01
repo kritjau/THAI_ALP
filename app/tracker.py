@@ -10,6 +10,7 @@ class Track:
     plate_text: str = ""
     confidence: float = 0.0
     color: str = ""
+    vehicle_type: str = ""
     last_ocr: float = 0.0
     logged: bool = False
     gate_opened: bool = False
