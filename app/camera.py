@@ -114,9 +114,19 @@ class CameraStream:
                 self._frame = frame
 
     def _reconnect(self):
-        if self._cap:
-            self._cap.release()
-            self._cap = None
+        # Deliberately NOT calling self._cap.release() here: the read that
+        # just timed out may still be running on its own abandoned thread
+        # (see _call_with_timeout) -- cv2.VideoCapture isn't thread-safe,
+        # and releasing it while another thread is still inside a blocking
+        # read() is a real, reproducible cause of native heap corruption
+        # (observed as a segfault -- sometimes in a totally unrelated
+        # library sharing the process, e.g. paddle, since heap corruption
+        # doesn't necessarily crash at its actual source). Just drop our
+        # reference; the abandoned thread's own reference (held via the
+        # bound `cap.read` it's still running) keeps the old capture alive
+        # until that call actually returns, so it's only cleaned up once
+        # nothing is using it anymore.
+        self._cap = None
         while self._running:
             try:
                 self._open()
@@ -133,5 +143,7 @@ class CameraStream:
         self._running = False
         if self._thread:
             self._thread.join(timeout=2)
-        if self._cap:
-            self._cap.release()
+        # Same hazard as _reconnect() above -- an abandoned timed-out read
+        # may still be in flight on the last capture, so don't force-release
+        # it here either; just drop the reference.
+        self._cap = None
