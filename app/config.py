@@ -57,7 +57,10 @@ class Settings:
     ocr_min_segment_confidence: float = _env_float("OCR_MIN_SEGMENT_CONFIDENCE", 0.5)
     # Plate crops are small at driving distance; upscale before OCR so small Thai
     # glyphs (esp. the province line) have enough pixels to be read reliably.
-    ocr_upscale_height: int = _env_int("OCR_UPSCALE_HEIGHT", 200)
+    # 280 rather than a smaller value since visually similar consonants
+    # (ข/ค/ต, ซ/ช, etc.) need more resolution to tell apart than a plain
+    # presence-of-text read does.
+    ocr_upscale_height: int = _env_int("OCR_UPSCALE_HEIGHT", 280)
     # Corrects in-plane rotation (tilted camera/crooked plate) before OCR --
     # not full perspective correction, see PlateReader._deskew(). A quick
     # off-switch in case it ever proves to hurt more than it helps on real
