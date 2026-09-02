@@ -148,7 +148,7 @@ header h1 {
 .stats-body {
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 2.5rem;
   padding: 1.1rem;
 }
 
@@ -156,6 +156,31 @@ header h1 {
   .stats-body {
     flex-wrap: wrap;
   }
+}
+
+.stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.stat-block + .stat-block {
+  padding-left: 2.5rem;
+  border-left: 1px solid var(--border);
+}
+
+.stat-block-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-block-row {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
 }
 
 .donut-wrap {
@@ -234,6 +259,47 @@ header h1 {
 
 .legend-pct {
   font-weight: 400;
+}
+
+/* Plate-read accept/reject rate -- the real-world signal for whether OCR
+   tuning (upscale height, character voting) is actually helping. */
+.reject-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 180px;
+}
+
+.reject-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.reject-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.reject-stat-text {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.reject-stat-text strong {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.reject-stat-detail {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-left: 0.25rem;
+  font-variant-numeric: tabular-nums;
 }
 
 main {

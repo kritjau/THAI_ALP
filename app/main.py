@@ -154,7 +154,10 @@ def api_detections(limit: int = 50):
 
 @app.get("/api/stats")
 def api_stats():
-    return db.vehicle_type_counts()
+    return {
+        "vehicle_types": db.vehicle_type_counts(),
+        "rejections": _pipeline.rejection_stats() if _pipeline else {"accepted": 0, "rejected": 0},
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
