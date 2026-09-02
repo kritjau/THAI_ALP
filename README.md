@@ -64,8 +64,8 @@ classification) are one `app/camera_worker.py:CameraWorker` per camera --
 `app/pipeline.py` and `app_live/pipeline.py` each run one `CameraWorker` per
 entry in `Settings.camera_configs()` (`CAMERA_SOURCE` plus however many
 `CAMERA_SOURCE_2`, `CAMERA_SOURCE_3`, ... are set) rather than assuming a
-single camera. The dashboard renders one video panel per camera, and
-Detections/Captures carry a Camera column/tag so a plate can be tied back to
+single camera. The dashboard renders one video panel per camera, and the
+Detections table carries a Camera column so a plate can be tied back to
 which feed saw it. Each camera gets its own detector/tracker/OCR model
 instances (ByteTrack's tracker state, in particular, can't be shared across
 streams), so this is real added CPU/GPU/RAM cost per camera, not just a
