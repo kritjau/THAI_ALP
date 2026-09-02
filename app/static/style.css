@@ -238,27 +238,15 @@ header h1 {
 
 main {
   display: grid;
-  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 1.8fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.4fr);
   gap: 1.25rem;
   padding: 1.25rem 1.75rem 2rem;
   align-items: stretch;
 }
 
-@media (max-width: 1200px) {
-  main {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .video-column {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   main {
     grid-template-columns: 1fr;
-  }
-  .video-column {
-    grid-column: auto;
   }
 }
 
@@ -409,67 +397,21 @@ main {
   50% { opacity: 0.4; transform: scale(0.8); }
 }
 
-/* Captures */
-
-.captures-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 1rem;
-  flex: 1;
-  min-height: 240px;
-  overflow-y: auto;
+/* Detections table thumbnail -- Captures used to be its own gallery panel;
+   merged into one list since it was already showing the same events as
+   Detections, just capped differently and with no other data alongside. */
+.thumb-cell {
+  padding: 0.35rem 0.5rem 0.35rem 1rem;
+  width: 60px;
 }
 
-.capture-card {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.4rem;
-  background: var(--panel-alt);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  overflow: hidden;
-  transition: transform 0.15s ease, border-color 0.15s ease;
-}
-
-.capture-card:hover {
-  transform: translateX(3px);
-  border-color: #3a4257;
-}
-
-.capture-card img {
+.thumb-cell img {
   display: block;
-  width: 76px;
-  height: 56px;
-  border-radius: 6px;
+  width: 44px;
+  height: 32px;
+  border-radius: 5px;
   object-fit: cover;
   background: #05060a;
-  flex-shrink: 0;
-}
-
-.capture-caption {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  min-width: 0;
-}
-
-.capture-caption .plate {
-  font-weight: 600;
-  color: var(--accent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.capture-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--muted);
-  font-size: 0.7rem;
 }
 
 /* Detections table */

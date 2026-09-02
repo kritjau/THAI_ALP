@@ -52,6 +52,7 @@ function vehicleTypeLabel(det) {
 
 function upsertRow(body, det) {
   const cells = `
+    <td class="thumb-cell">${det.image ? `<img src="${det.image}" alt="captured plate" />` : ""}</td>
     <td>${formatTime(det.timestamp)}</td>
     <td class="camera-tag">${cameraTag(det)}</td>
     <td class="plate">${det.plate_text}${registeredBadge(det)}</td>
@@ -86,65 +87,12 @@ function upsertRow(body, det) {
   setCount("detections-count", rowsById.size);
 }
 
-const capturesById = new Map();
-const MAX_CAPTURES = 4;
-
-function upsertCapture(grid, det) {
-  // Only detections that actually carry a captured crop belong here -- the
-  // detections table still lists everything, this is just the visual gallery.
-  if (!det.image) {
-    return;
-  }
-
-  const inner = `
-    <img src="${det.image}" alt="captured plate" />
-    <div class="capture-caption">
-      <span class="plate">${det.plate_text}${registeredBadge(det)}</span>
-      <span class="capture-meta">
-        ${formatTime(det.timestamp)} &middot; ${cameraTag(det)}
-        ${det.vehicle_type ? `&middot; ${vehicleTypeLabel(det)}` : ""}
-        ${det.color ? `<span class="swatch" style="background:${COLOR_SWATCHES[det.color] || "#666"}"></span>` : ""}
-      </span>
-    </div>
-  `;
-
-  const existing = capturesById.get(det.id);
-  if (existing) {
-    existing.innerHTML = inner;
-    grid.prepend(existing);
-  } else {
-    const empty = grid.querySelector(".empty-state");
-    if (empty) empty.remove();
-
-    const card = document.createElement("div");
-    card.className = "capture-card";
-    card.innerHTML = inner;
-    capturesById.set(det.id, card);
-    grid.prepend(card);
-
-    while (grid.children.length > MAX_CAPTURES) {
-      const last = grid.lastElementChild;
-      for (const [id, el] of capturesById) {
-        if (el === last) {
-          capturesById.delete(id);
-          break;
-        }
-      }
-      grid.removeChild(last);
-    }
-  }
-
-  setCount("captures-count", capturesById.size);
-}
-
 async function loadHistory() {
   const body = document.getElementById("detections-body");
-  const grid = document.getElementById("captures-grid");
   const res = await fetch(`/api/detections?limit=${MAX_ROWS}`);
   const rows = await res.json();
   for (const det of rows.slice().reverse()) {
     upsertRow(body, det);
-    upsertCapture(grid, det);
   }
 }
 
@@ -160,12 +108,10 @@ function connectWebSocket() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws/detections`);
   const body = document.getElementById("detections-body");
-  const grid = document.getElementById("captures-grid");
   ws.onopen = () => setConnectionStatus(true);
   ws.onmessage = (event) => {
     const det = JSON.parse(event.data);
     upsertRow(body, det);
-    upsertCapture(grid, det);
   };
   ws.onclose = () => {
     setConnectionStatus(false);
