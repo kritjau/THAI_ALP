@@ -106,35 +106,93 @@ header h1 {
 }
 
 .stats-panel {
-  margin: 1.25rem 1.75rem 0;
+  margin: 0 1.75rem 1.5rem;
 }
 
-.stats-row {
+.stats-body {
   display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 1.1rem;
   flex-wrap: wrap;
-  gap: 1.75rem;
-  padding: 0.9rem 1.1rem;
 }
 
-.stat-tile {
+.donut-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.donut-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.donut-svg circle {
+  transition: stroke-dasharray 0.3s ease;
+}
+
+.donut-total {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  min-width: 5.5rem;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
-.stat-value {
-  font-size: 1.4rem;
+.donut-total-value {
+  font-size: 1.3rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text);
 }
 
-.stat-label {
-  font-size: 0.75rem;
+.donut-total-label {
+  font-size: 0.65rem;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* Direct labels, not color alone, are what makes this palette accessible --
+   two of the four swatches read below ideal contrast against the panel
+   background on their own (see palette validation notes in app.js). */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  color: var(--text);
+  min-width: 6rem;
+}
+
+.legend-value {
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend-pct {
+  font-weight: 400;
 }
 
 main {
