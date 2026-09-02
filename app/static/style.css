@@ -14,6 +14,8 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #2c3242 transparent;
 }
 
 body {
@@ -24,6 +26,22 @@ body {
     var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Browser surfaces this page didn't draw still carry the design -- themed
+   from the palette instead of left as engine defaults. */
+::selection {
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+.camera-toggle:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar {
@@ -77,6 +95,24 @@ header h1 {
   color: var(--text);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.admin-link {
+  display: none;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.15s ease;
+}
+
+.admin-link:hover {
+  color: var(--text);
+}
+
 .status {
   display: flex;
   align-items: center;
@@ -114,13 +150,18 @@ header h1 {
   align-items: center;
   gap: 2rem;
   padding: 1.1rem;
-  flex-wrap: wrap;
+}
+
+@media (max-width: 420px) {
+  .stats-body {
+    flex-wrap: wrap;
+  }
 }
 
 .donut-wrap {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: 88px;
+  height: 88px;
   flex-shrink: 0;
 }
 
@@ -144,13 +185,13 @@ header h1 {
 }
 
 .donut-total-value {
-  font-size: 1.3rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text);
 }
 
 .donut-total-label {
-  font-size: 0.65rem;
+  font-size: 0.55rem;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
@@ -457,6 +498,7 @@ th, td {
   padding: 0.55rem 1rem;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 th {

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/style.css" />
+<link rel="stylesheet" href="/static/style.css?v=1" />
 <style>
   main.admin-main {
     display: block;
@@ -40,15 +40,35 @@
     font-weight: 600;
     font-size: 0.85rem;
     cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+  }
+  .add-form button:hover:not(:disabled) {
+    background: rgba(74, 222, 128, 0.25);
+  }
+  .add-form button:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
   .remove-btn {
     background: transparent;
     color: var(--danger);
     padding: 0.3rem 0.6rem;
   }
-  .remove-btn:hover { border-color: var(--danger); }
+  .remove-btn:hover:not(:disabled) { border-color: var(--danger); }
+  .remove-btn:disabled { opacity: 0.5; cursor: default; }
   .back-link { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
   .back-link:hover { color: var(--text); }
+  .admin-panel { margin: 1.25rem 1.75rem 2rem; }
+  .admin-panel .table-scroll { min-height: 0; }
+  .form-error {
+    margin: 0 1.1rem 0.9rem;
+    padding: 0.5rem 0.7rem;
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 8px;
+    color: var(--danger);
+    font-size: 0.8rem;
+  }
 </style>
 </head>
 <body>
@@ -59,17 +79,18 @@
   <a class="back-link" href="/">&larr; Back to dashboard</a>
 </header>
 <main class="admin-main">
-  <section class="panel" style="margin: 1.25rem 1.75rem 2rem;">
+  <section class="panel admin-panel">
     <form class="add-form" id="add-form">
       <input id="plate-input" type="text" placeholder="Plate text (e.g. 5กค 9834)" required />
       <input id="label-input" type="text" placeholder="Label (optional, e.g. owner name)" />
       <button type="submit">Add</button>
     </form>
+    <p class="form-error" id="form-error" hidden></p>
     <div class="panel-header">
       <h2>Registered</h2>
       <span class="count-badge" id="plates-count">0</span>
     </div>
-    <div class="table-scroll" style="min-height: 0;">
+    <div class="table-scroll">
       <table>
         <thead>
           <tr>
@@ -86,8 +107,15 @@
 </main>
 <script>
 async function loadPlates() {
-  const res = await fetch("/api/registered-plates");
-  const plates = await res.json();
+  let plates;
+  try {
+    const res = await fetch("/api/registered-plates");
+    if (!res.ok) throw new Error(`Couldn't load registered plates (${res.status}).`);
+    plates = await res.json();
+  } catch (err) {
+    showFormError(err.message || "Couldn't load registered plates -- try refreshing.");
+    return;
+  }
   const body = document.getElementById("plates-body");
   body.innerHTML = "";
   for (const p of plates) {
@@ -103,28 +131,64 @@ async function loadPlates() {
   document.getElementById("plates-empty").style.display = plates.length ? "none" : "block";
 }
 
+const formError = document.getElementById("form-error");
+
+function showFormError(message) {
+  formError.textContent = message;
+  formError.hidden = false;
+}
+
+function clearFormError() {
+  formError.hidden = true;
+}
+
 document.getElementById("add-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  clearFormError();
   const plateInput = document.getElementById("plate-input");
   const labelInput = document.getElementById("label-input");
   const plate_text = plateInput.value.trim();
   if (!plate_text) return;
-  await fetch("/api/registered-plates", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plate_text, label: labelInput.value.trim() || null }),
-  });
-  plateInput.value = "";
-  labelInput.value = "";
-  loadPlates();
+
+  const submitBtn = e.target.querySelector("button");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Adding…";
+  try {
+    const res = await fetch("/api/registered-plates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plate_text, label: labelInput.value.trim() || null }),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null);
+      throw new Error(detail?.detail || `Couldn't add this plate (${res.status}).`);
+    }
+    plateInput.value = "";
+    labelInput.value = "";
+    await loadPlates();
+  } catch (err) {
+    showFormError(err.message || "Couldn't add this plate -- try again.");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Add";
+  }
 });
 
 document.getElementById("plates-body").addEventListener("click", async (e) => {
   if (!e.target.matches(".remove-btn")) return;
-  await fetch(`/api/registered-plates/${encodeURIComponent(e.target.dataset.plate)}`, {
-    method: "DELETE",
-  });
-  loadPlates();
+  clearFormError();
+  const btn = e.target;
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/registered-plates/${encodeURIComponent(btn.dataset.plate)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error(`Couldn't remove this plate (${res.status}).`);
+    await loadPlates();
+  } catch (err) {
+    showFormError(err.message || "Couldn't remove this plate -- try again.");
+    btn.disabled = false;
+  }
 });
 
 loadPlates();

@@ -7,15 +7,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/style.css" />
+<link rel="stylesheet" href="/static/style.css?v=1" />
 </head>
 <body>
 <header>
   <div class="brand">
     <span class="brand-mark">License Plate Detection</span>
   </div>
-  <div style="display:flex; align-items:center; gap:1rem;">
-    <a href="/admin" id="admin-link" style="display:none; color:var(--muted); text-decoration:none; font-size:0.85rem;">Registered plates</a>
+  <div class="header-actions">
+    <a href="/admin" id="admin-link" class="admin-link">Registered plates</a>
     <div class="status" id="connection-status">
       <span class="status-dot"></span>
       <span class="status-label">Connecting…</span>
