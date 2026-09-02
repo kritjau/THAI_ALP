@@ -86,6 +86,20 @@ def update_detection(
         )
 
 
+def vehicle_type_counts() -> dict[str, int]:
+    """Total detections per vehicle type across all history -- a DB query
+    rather than an in-memory tally since app/ is the persistent app and this
+    should survive a restart, and GROUP BY already gives an accurate count
+    per unique tracked vehicle (one row per track, refined in place -- see
+    update_detection) rather than double-counting re-OCR refinements."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "SELECT COALESCE(vehicle_type, 'unknown') AS vt, COUNT(*) "
+            "FROM detections GROUP BY vt"
+        )
+        return {row[0]: row[1] for row in cur.fetchall()}
+
+
 def recent_detections(limit: int = 50) -> list[dict]:
     with _connect() as conn:
         cur = conn.execute(

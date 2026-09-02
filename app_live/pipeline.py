@@ -4,6 +4,7 @@ import base64
 import os
 import queue
 import time
+from collections import defaultdict
 
 import cv2
 
@@ -53,6 +54,10 @@ class LiveOnlyPipeline:
         # by the OCR worker threads below (one per camera, but each key is
         # only ever written by its own camera's thread), so no lock needed.
         self._recent_plates: dict[tuple[str, str], float] = {}
+        # Aggregate counts only (no plate text), so this doesn't conflict
+        # with the no-storage design -- resets to zero on restart same as
+        # everything else here, since nothing here is meant to persist.
+        self._type_counts: dict[str, int] = defaultdict(int)
         self.cameras = build_camera_workers(settings.camera_configs(), self._on_new_read)
         self._cameras_by_id = {cam.camera_id: cam for cam in self.cameras}
 
@@ -81,6 +86,12 @@ class LiveOnlyPipeline:
         if registered and not track.gate_opened:
             open_gate(text)
             track.gate_opened = True
+
+        # Same "genuinely new, not a cooldown-deduped re-appearance"
+        # condition the event emission below uses -- counting anything
+        # looser would double-count a car re-OCR'd or briefly re-tracked.
+        if is_new_sighting and not is_recent_duplicate and vehicle_type:
+            self._type_counts[vehicle_type] += 1
 
         if not is_recent_duplicate:
             self._new_events.put(
@@ -115,6 +126,9 @@ class LiveOnlyPipeline:
 
     def camera_list(self) -> list[dict]:
         return [{"id": cam.camera_id, "name": cam.name} for cam in self.cameras]
+
+    def type_counts(self) -> dict[str, int]:
+        return dict(self._type_counts)
 
     def latest_jpeg(self, camera_id: str | None = None) -> bytes | None:
         cam = self._resolve_camera(camera_id)

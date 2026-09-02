@@ -29,7 +29,7 @@ function setCount(id, n) {
 }
 
 const rowsById = new Map();
-const MAX_ROWS = 12;
+const MAX_ROWS = 8;
 
 function registeredBadge(det) {
   return det.registered ? ' <span class="registered-badge">GATE</span>' : "";
@@ -87,7 +87,7 @@ function upsertRow(body, det) {
 }
 
 const capturesById = new Map();
-const MAX_CAPTURES = 6;
+const MAX_CAPTURES = 4;
 
 function upsertCapture(grid, det) {
   // Only detections that actually carry a captured crop belong here -- the
@@ -140,7 +140,7 @@ function upsertCapture(grid, det) {
 async function loadHistory() {
   const body = document.getElementById("detections-body");
   const grid = document.getElementById("captures-grid");
-  const res = await fetch("/api/detections?limit=12");
+  const res = await fetch(`/api/detections?limit=${MAX_ROWS}`);
   const rows = await res.json();
   for (const det of rows.slice().reverse()) {
     upsertRow(body, det);
@@ -313,6 +313,40 @@ async function setupCameras() {
   updateNoCamerasMessage(column);
 }
 
+// Fixed display order so tiles don't reshuffle as counts change; anything
+// outside these four (there shouldn't be, since vehicle_detector.py only
+// ever labels one of these) still renders, just appended after.
+const VEHICLE_TYPE_ORDER = ["car", "motorcycle", "bus", "truck"];
+const VEHICLE_TYPE_LABELS = { car: "Car", motorcycle: "Motorcycle", bus: "Bus", truck: "Truck", unknown: "Unknown" };
+
+async function loadStats() {
+  const row = document.getElementById("stats-row");
+  let counts;
+  try {
+    const res = await fetch("/api/stats");
+    if (!res.ok) return;
+    counts = await res.json();
+  } catch (err) {
+    return; // leave whatever was last shown rather than blanking it out
+  }
+
+  const keys = [...VEHICLE_TYPE_ORDER, ...Object.keys(counts).filter((k) => !VEHICLE_TYPE_ORDER.includes(k))];
+  const tiles = keys.filter((k) => counts[k]);
+  if (tiles.length === 0) {
+    row.innerHTML = '<p class="empty-state">No detections yet.</p>';
+    return;
+  }
+  row.innerHTML = tiles
+    .map(
+      (k) => `
+      <div class="stat-tile">
+        <span class="stat-value">${counts[k]}</span>
+        <span class="stat-label">${VEHICLE_TYPE_LABELS[k] || k}</span>
+      </div>`
+    )
+    .join("");
+}
+
 function revealAdminLinkIfAvailable() {
   // Shared by app/ (no gate feature -- doesn't have this route) and
   // app_live/ (does) -- only show the link where it'll actually work.
@@ -327,3 +361,5 @@ loadHistory();
 connectWebSocket();
 setupCameras();
 revealAdminLinkIfAvailable();
+loadStats();
+setInterval(loadStats, 5000);

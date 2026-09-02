@@ -129,6 +129,11 @@ def api_cameras():
     return _pipeline.camera_list() if _pipeline else []
 
 
+@app.get("/api/stats")
+def api_stats():
+    return _pipeline.type_counts() if _pipeline else {}
+
+
 @app.websocket("/ws/detections")
 async def ws_detections(websocket: WebSocket):
     await websocket.accept()

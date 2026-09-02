@@ -152,6 +152,11 @@ def api_detections(limit: int = 50):
     return [_with_image_url(item) for item in db.recent_detections(limit)]
 
 
+@app.get("/api/stats")
+def api_stats():
+    return db.vehicle_type_counts()
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (static_dir / "index.html").read_text(encoding="utf-8")

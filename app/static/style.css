@@ -105,6 +105,38 @@ header h1 {
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.15);
 }
 
+.stats-panel {
+  margin: 1.25rem 1.75rem 0;
+}
+
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.75rem;
+  padding: 0.9rem 1.1rem;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 5.5rem;
+}
+
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 main {
   display: grid;
   grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 1.8fr);
