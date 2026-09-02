@@ -25,6 +25,15 @@ logger = logging.getLogger(__name__)
 MAX_READ_HISTORY = 5
 
 
+def aggregate_rejection_stats(cameras: list["CameraWorker"]) -> dict:
+    """Sums accepted/rejected plate-shape counts across every camera --
+    shared by app/pipeline.py and app_live/pipeline.py so both dashboards
+    show the same "how well is OCR doing" signal the same way."""
+    accepted = sum(cam.accepted_count for cam in cameras)
+    rejected = sum(cam.rejected_count for cam in cameras)
+    return {"accepted": accepted, "rejected": rejected}
+
+
 def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker"]:
     """Builds one CameraWorker per config, skipping (and logging) any whose
     source fails to open instead of letting one bad/offline camera take
@@ -80,6 +89,12 @@ class CameraWorker:
         self._latest_jpeg = None
         self._frame_count = 0
         self._visible_tracks: list = []
+        # Reads that passed the plate-shape check vs. ones rejected by it --
+        # see _read() -- exposed via rejection_stats() so the dashboard can
+        # show the real-world accept/reject split instead of it only being
+        # visible by grepping the log.
+        self.accepted_count = 0
+        self.rejected_count = 0
 
         # See app/pipeline.py's original docstring for why this is a
         # decoupled background worker rather than inline OCR: it keeps a
@@ -158,12 +173,14 @@ class CameraWorker:
         # have been a bad read.
         normalized = normalize_plate(text)
         if not looks_like_valid_plate_number(normalized):
+            self.rejected_count += 1
             logger.info(
                 "Camera %s track %s: rejected %r (normalized %r, conf %.2f) -- "
                 "doesn't match a plausible Thai plate shape",
                 self.camera_id, track_id, text, normalized, ocr_conf,
             )
             return
+        self.accepted_count += 1
 
         track.read_history.append((text, ocr_conf))
         if len(track.read_history) > MAX_READ_HISTORY:

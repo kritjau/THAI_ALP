@@ -131,7 +131,10 @@ def api_cameras():
 
 @app.get("/api/stats")
 def api_stats():
-    return _pipeline.type_counts() if _pipeline else {}
+    return {
+        "vehicle_types": _pipeline.type_counts() if _pipeline else {},
+        "rejections": _pipeline.rejection_stats() if _pipeline else {"accepted": 0, "rejected": 0},
+    }
 
 
 @app.websocket("/ws/detections")

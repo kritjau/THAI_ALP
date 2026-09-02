@@ -9,7 +9,7 @@ from collections import defaultdict
 import cv2
 
 from app import registered_plates_db
-from app.camera_worker import CameraWorker, build_camera_workers
+from app.camera_worker import CameraWorker, aggregate_rejection_stats, build_camera_workers
 from app.config import settings
 from app.gate import open_gate
 
@@ -129,6 +129,9 @@ class LiveOnlyPipeline:
 
     def type_counts(self) -> dict[str, int]:
         return dict(self._type_counts)
+
+    def rejection_stats(self) -> dict:
+        return aggregate_rejection_stats(self.cameras)
 
     def latest_jpeg(self, camera_id: str | None = None) -> bytes | None:
         cam = self._resolve_camera(camera_id)

@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 
 from . import db
-from .camera_worker import CameraWorker, build_camera_workers
+from .camera_worker import CameraWorker, aggregate_rejection_stats, build_camera_workers
 from .config import settings
 from .json_export import JsonExporter
 
@@ -90,6 +90,9 @@ class ALPRPipeline:
 
     def camera_list(self) -> list[dict]:
         return [{"id": cam.camera_id, "name": cam.name} for cam in self.cameras]
+
+    def rejection_stats(self) -> dict:
+        return aggregate_rejection_stats(self.cameras)
 
     def latest_jpeg(self, camera_id: str | None = None) -> bytes | None:
         cam = self._resolve_camera(camera_id)

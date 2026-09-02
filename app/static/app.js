@@ -293,21 +293,10 @@ function buildDonutSvg(counts, presentKeys, total) {
   return `<svg viewBox="0 0 120 120" class="donut-svg" role="img" aria-label="Vehicle type breakdown">${segments}</svg>`;
 }
 
-async function loadStats() {
-  const body = document.getElementById("stats-body");
-  let counts;
-  try {
-    const res = await fetch("/api/stats");
-    if (!res.ok) return;
-    counts = await res.json();
-  } catch (err) {
-    return; // leave whatever was last shown rather than blanking it out
-  }
-
+function buildVehicleTypeBlock(counts) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   if (total === 0) {
-    body.innerHTML = '<p class="empty-state">No detections yet.</p>';
-    return;
+    return '<p class="empty-state">No detections yet.</p>';
   }
 
   const keys = [...VEHICLE_TYPE_ORDER, ...Object.keys(counts).filter((k) => !VEHICLE_TYPE_ORDER.includes(k))];
@@ -325,7 +314,7 @@ async function loadStats() {
     })
     .join("");
 
-  body.innerHTML = `
+  return `
     <div class="donut-wrap">
       ${buildDonutSvg(counts, present, total)}
       <div class="donut-total">
@@ -334,6 +323,54 @@ async function loadStats() {
       </div>
     </div>
     <div class="legend">${legendRows}</div>
+  `;
+}
+
+// How many OCR reads made it past the plate-shape check (app/plate_format.py)
+// vs. got rejected as implausible -- the real-world signal for whether
+// normalization/recognition tuning (upscale height, character voting) is
+// actually helping, without needing to grep the server log for "rejected".
+function buildRejectionBlock(stats) {
+  const accepted = stats.accepted || 0;
+  const rejected = stats.rejected || 0;
+  const total = accepted + rejected;
+  if (total === 0) {
+    return '<p class="empty-state">No reads yet.</p>';
+  }
+  const pct = Math.round((accepted / total) * 100);
+  return `
+    <div class="reject-stat">
+      <div class="reject-bar" role="img" aria-label="${pct}% of reads accepted">
+        <div class="reject-bar-fill" style="width:${pct}%"></div>
+      </div>
+      <span class="reject-stat-text">
+        <strong>${pct}%</strong> accepted
+        <span class="reject-stat-detail">(${accepted} of ${total} reads)</span>
+      </span>
+    </div>
+  `;
+}
+
+async function loadStats() {
+  const body = document.getElementById("stats-body");
+  let data;
+  try {
+    const res = await fetch("/api/stats");
+    if (!res.ok) return;
+    data = await res.json();
+  } catch (err) {
+    return; // leave whatever was last shown rather than blanking it out
+  }
+
+  body.innerHTML = `
+    <div class="stat-block">
+      <span class="stat-block-label">Vehicle Types</span>
+      <div class="stat-block-row">${buildVehicleTypeBlock(data.vehicle_types || {})}</div>
+    </div>
+    <div class="stat-block">
+      <span class="stat-block-label">Plate Reads</span>
+      <div class="stat-block-row">${buildRejectionBlock(data.rejections || {})}</div>
+    </div>
   `;
 }
 
