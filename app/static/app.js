@@ -341,7 +341,7 @@ function buildRejectionBlock(stats) {
   return `
     <div class="reject-stat">
       <div class="reject-bar" role="img" aria-label="${pct}% of reads accepted">
-        <div class="reject-bar-fill" style="width:${pct}%"></div>
+        <div class="reject-bar-fill" style="transform:scaleX(${pct / 100})"></div>
       </div>
       <span class="reject-stat-text">
         <strong>${pct}%</strong> accepted
