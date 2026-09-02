@@ -313,14 +313,42 @@ async function setupCameras() {
   updateNoCamerasMessage(column);
 }
 
-// Fixed display order so tiles don't reshuffle as counts change; anything
+// Fixed display order so segments don't reshuffle as counts change; anything
 // outside these four (there shouldn't be, since vehicle_detector.py only
-// ever labels one of these) still renders, just appended after.
+// ever labels one of these) still renders, just appended after with a
+// neutral fallback color.
 const VEHICLE_TYPE_ORDER = ["car", "motorcycle", "bus", "truck"];
 const VEHICLE_TYPE_LABELS = { car: "Car", motorcycle: "Motorcycle", bus: "Bus", truck: "Truck", unknown: "Unknown" };
+// One fixed hue per type (never reassigned/cycled) from the dark-mode
+// categorical palette, in the order that keeps every pair distinguishable
+// going around the ring -- including car/truck, which sit next to each
+// other where the ring closes and wouldn't be checked by a plain
+// left-to-right "adjacent" list. Two of these (bus, truck) read below ideal
+// contrast against the panel background on their own -- the legend's text
+// label is what actually carries identity for those, not the swatch alone.
+const VEHICLE_TYPE_COLORS = { car: "#3987e5", motorcycle: "#d95926", bus: "#199e70", truck: "#c98500" };
+const DONUT_FALLBACK_COLOR = "#8b93a7";
+
+function buildDonutSvg(counts, presentKeys, total) {
+  const R = 46, CX = 60, CY = 60, STROKE = 18, GAP = 3;
+  const CIRC = 2 * Math.PI * R;
+  let offset = 0;
+  let segments = `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--border)" stroke-width="${STROKE}"></circle>`;
+  for (const key of presentKeys) {
+    const len = (counts[key] / total) * CIRC;
+    const dash = Math.max(len - GAP, 0.001); // small gap between segments, like a stacked bar
+    segments += `
+      <circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
+        stroke="${VEHICLE_TYPE_COLORS[key] || DONUT_FALLBACK_COLOR}" stroke-width="${STROKE}"
+        stroke-dasharray="${dash} ${CIRC - dash}" stroke-dashoffset="${-offset}"
+        transform="rotate(-90 ${CX} ${CY})"></circle>`;
+    offset += len;
+  }
+  return `<svg viewBox="0 0 120 120" class="donut-svg" role="img" aria-label="Vehicle type breakdown">${segments}</svg>`;
+}
 
 async function loadStats() {
-  const row = document.getElementById("stats-row");
+  const body = document.getElementById("stats-body");
   let counts;
   try {
     const res = await fetch("/api/stats");
@@ -330,21 +358,37 @@ async function loadStats() {
     return; // leave whatever was last shown rather than blanking it out
   }
 
-  const keys = [...VEHICLE_TYPE_ORDER, ...Object.keys(counts).filter((k) => !VEHICLE_TYPE_ORDER.includes(k))];
-  const tiles = keys.filter((k) => counts[k]);
-  if (tiles.length === 0) {
-    row.innerHTML = '<p class="empty-state">No detections yet.</p>';
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (total === 0) {
+    body.innerHTML = '<p class="empty-state">No detections yet.</p>';
     return;
   }
-  row.innerHTML = tiles
-    .map(
-      (k) => `
-      <div class="stat-tile">
-        <span class="stat-value">${counts[k]}</span>
-        <span class="stat-label">${VEHICLE_TYPE_LABELS[k] || k}</span>
-      </div>`
-    )
+
+  const keys = [...VEHICLE_TYPE_ORDER, ...Object.keys(counts).filter((k) => !VEHICLE_TYPE_ORDER.includes(k))];
+  const present = keys.filter((k) => counts[k]);
+
+  const legendRows = present
+    .map((k) => {
+      const pct = Math.round((counts[k] / total) * 100);
+      return `
+        <div class="legend-row">
+          <span class="legend-swatch" style="background:${VEHICLE_TYPE_COLORS[k] || DONUT_FALLBACK_COLOR}"></span>
+          <span class="legend-label">${VEHICLE_TYPE_LABELS[k] || k}</span>
+          <span class="legend-value">${counts[k]} <span class="legend-pct">(${pct}%)</span></span>
+        </div>`;
+    })
     .join("");
+
+  body.innerHTML = `
+    <div class="donut-wrap">
+      ${buildDonutSvg(counts, present, total)}
+      <div class="donut-total">
+        <span class="donut-total-value">${total}</span>
+        <span class="donut-total-label">Total</span>
+      </div>
+    </div>
+    <div class="legend">${legendRows}</div>
+  `;
 }
 
 function revealAdminLinkIfAvailable() {
