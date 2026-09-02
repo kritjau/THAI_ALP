@@ -29,7 +29,7 @@ function setCount(id, n) {
 }
 
 const rowsById = new Map();
-const MAX_ROWS = 8;
+const MAX_ROWS = 10;
 
 function registeredBadge(det) {
   return det.registered ? ' <span class="registered-badge">GATE</span>' : "";
