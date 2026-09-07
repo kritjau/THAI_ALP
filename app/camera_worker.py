@@ -25,13 +25,23 @@ logger = logging.getLogger(__name__)
 MAX_READ_HISTORY = 5
 
 
-def aggregate_rejection_stats(cameras: list["CameraWorker"]) -> dict:
-    """Sums accepted/rejected plate-shape counts across every camera --
-    shared by app/pipeline.py and app_live/pipeline.py so both dashboards
-    show the same "how well is OCR doing" signal the same way."""
-    accepted = sum(cam.accepted_count for cam in cameras)
-    rejected = sum(cam.rejected_count for cam in cameras)
-    return {"accepted": accepted, "rejected": rejected}
+def per_camera_rejection_stats(cameras: list["CameraWorker"]) -> list[dict]:
+    """Accepted/rejected plate-shape counts per camera, plus enough camera
+    identity (id/name/page) for a dashboard to filter or total them -- e.g.
+    the monitoring dashboard summing only its own "main"-page cameras into
+    an overall figure, since a dedicated gate camera's read quality isn't
+    what that page is for (see CameraWorker.page). Shared by app/pipeline.py
+    and app_live/pipeline.py so both dashboards show this the same way."""
+    return [
+        {
+            "id": cam.camera_id,
+            "name": cam.name,
+            "page": cam.page,
+            "accepted": cam.accepted_count,
+            "rejected": cam.rejected_count,
+        }
+        for cam in cameras
+    ]
 
 
 def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker"]:

@@ -157,7 +157,7 @@ def api_stats():
     return {
         "vehicle_types": db.vehicle_type_counts(),
         "vehicle_types_daily": db.vehicle_type_daily_counts(),
-        "rejections": _pipeline.rejection_stats() if _pipeline else {"accepted": 0, "rejected": 0},
+        "rejections_by_camera": _pipeline.rejection_stats() if _pipeline else [],
     }
 
 

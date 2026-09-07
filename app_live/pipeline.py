@@ -9,7 +9,7 @@ from collections import defaultdict
 import cv2
 
 from app import registered_plates_db
-from app.camera_worker import CameraWorker, aggregate_rejection_stats, build_camera_workers
+from app.camera_worker import CameraWorker, build_camera_workers, per_camera_rejection_stats
 from app.config import settings
 from app.gate import open_gate
 
@@ -158,8 +158,8 @@ class LiveOnlyPipeline:
         cutoff = time.strftime("%Y-%m-%d", time.localtime(time.time() - (days - 1) * 86400))
         return {day: dict(counts) for day, counts in self._type_counts_daily.items() if day >= cutoff}
 
-    def rejection_stats(self) -> dict:
-        return aggregate_rejection_stats(self.cameras)
+    def rejection_stats(self) -> list[dict]:
+        return per_camera_rejection_stats(self.cameras)
 
     def latest_jpeg(self, camera_id: str | None = None) -> bytes | None:
         cam = self._resolve_camera(camera_id)
