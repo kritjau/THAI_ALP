@@ -89,7 +89,7 @@ class ALPRPipeline:
             Path(image_path).unlink(missing_ok=True)
 
     def camera_list(self) -> list[dict]:
-        return [{"id": cam.camera_id, "name": cam.name} for cam in self.cameras]
+        return [{"id": cam.camera_id, "name": cam.name, "page": cam.page} for cam in self.cameras]
 
     def rejection_stats(self) -> dict:
         return aggregate_rejection_stats(self.cameras)

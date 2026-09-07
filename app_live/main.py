@@ -133,6 +133,7 @@ def api_cameras():
 def api_stats():
     return {
         "vehicle_types": _pipeline.type_counts() if _pipeline else {},
+        "vehicle_types_daily": _pipeline.type_counts_daily() if _pipeline else {},
         "rejections": _pipeline.rejection_stats() if _pipeline else {"accepted": 0, "rejected": 0},
     }
 

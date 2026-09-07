@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/style.css?v=4" />
+<link rel="stylesheet" href="/static/style.css?v=5" />
 <style>
   main.admin-main {
     display: block;
@@ -60,6 +60,11 @@
   .back-link:hover { color: var(--text); }
   .admin-panel { margin: 1.25rem 1.75rem 2rem; }
   .admin-panel .table-scroll { min-height: 0; }
+  /* A camera marked CAMERA_PAGE_N=admin (see app/config.py) shows here
+     instead of the monitoring dashboard -- for a camera that exists to
+     trigger the gate, not to be eyeballed for detection quality. */
+  #gate-camera-section { margin: 1.25rem 1.75rem 0; }
+  #gate-camera-column { padding: 1rem 1.1rem; }
   .form-error {
     margin: 0 1.1rem 0.9rem;
     padding: 0.5rem 0.7rem;
@@ -78,6 +83,12 @@
   </div>
   <a class="back-link" href="/">&larr; Back to dashboard</a>
 </header>
+<section class="panel" id="gate-camera-section" hidden>
+  <div class="panel-header">
+    <h2>Gate Camera</h2>
+  </div>
+  <div class="video-column" id="gate-camera-column"></div>
+</section>
 <main class="admin-main">
   <section class="panel admin-panel">
     <form class="add-form" id="add-form">
@@ -192,6 +203,56 @@ document.getElementById("plates-body").addEventListener("click", async (e) => {
 });
 
 loadPlates();
+
+// A camera whose .env entry sets CAMERA_PAGE_N=admin (see app/config.py)
+// exists to trigger the gate, not to be watched for detection quality --
+// it's kept off the main monitoring dashboard and shown here instead.
+// Self-contained (this page doesn't load app.js) since there's normally
+// just the one gate camera; loosely mirrors setupCameras()/
+// watchImageStream() in app.js for the reload-on-stall behavior.
+async function setupGateCamera() {
+  let cameras;
+  try {
+    const res = await fetch("/api/cameras");
+    if (!res.ok) return;
+    cameras = await res.json();
+  } catch (err) {
+    return;
+  }
+  const gateCameras = (cameras || []).filter((cam) => cam.page === "admin");
+  if (gateCameras.length === 0) return;
+
+  const section = document.getElementById("gate-camera-section");
+  const column = document.getElementById("gate-camera-column");
+  section.hidden = false;
+
+  for (const cam of gateCameras) {
+    const src = cam.id ? `/video_feed/${cam.id}` : "/video_feed";
+    const panel = document.createElement("div");
+    panel.className = "video-panel";
+    panel.innerHTML = `
+      ${gateCameras.length > 1 ? `<span class="camera-label">${cam.name}</span>` : ""}
+      <img alt="${cam.name || "gate camera feed"}" />
+      <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+    `;
+    column.appendChild(panel);
+
+    const img = panel.querySelector("img");
+    let lastFrameAt = Date.now();
+    const reload = () => {
+      lastFrameAt = Date.now();
+      img.src = src + "?_=" + Date.now();
+    };
+    img.addEventListener("load", () => { lastFrameAt = Date.now(); });
+    img.addEventListener("error", () => setTimeout(reload, 2000));
+    setInterval(() => {
+      if (Date.now() - lastFrameAt > 8000) reload();
+    }, 3000);
+    reload();
+  }
+}
+
+setupGateCamera();
 </script>
 </body>
 </html>
