@@ -100,6 +100,25 @@ def vehicle_type_counts() -> dict[str, int]:
         return {row[0]: row[1] for row in cur.fetchall()}
 
 
+def vehicle_type_daily_counts(days: int = 7) -> dict[str, dict[str, int]]:
+    """Day (YYYY-MM-DD, local time) -> vehicle_type -> count, for the last
+    `days` calendar days including today -- powers the Vehicle Types trend
+    chart. Buckets the same REAL unix-epoch timestamp() already stores via
+    SQLite's date()/'localtime', rather than a separate stored date column."""
+    cutoff = time.time() - days * 86400
+    with _connect() as conn:
+        cur = conn.execute(
+            "SELECT date(timestamp, 'unixepoch', 'localtime') AS day, "
+            "COALESCE(vehicle_type, 'unknown') AS vt, COUNT(*) "
+            "FROM detections WHERE timestamp >= ? GROUP BY day, vt",
+            (cutoff,),
+        )
+        result: dict[str, dict[str, int]] = {}
+        for day, vt, count in cur.fetchall():
+            result.setdefault(day, {})[vt] = count
+        return result
+
+
 def recent_detections(limit: int = 50) -> list[dict]:
     with _connect() as conn:
         cur = conn.execute(

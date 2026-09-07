@@ -195,17 +195,29 @@ function updateNoCamerasMessage(column) {
 
 async function setupCameras() {
   const column = document.getElementById("video-column");
-  let cameras = [];
+  let fetched = [];
   try {
     const res = await fetch("/api/cameras");
-    if (res.ok) cameras = await res.json();
+    if (res.ok) fetched = await res.json();
   } catch (err) {
     // fall through to the single-camera fallback below
   }
-  if (!cameras || cameras.length === 0) {
+
+  // A camera marked CAMERA_PAGE_N=admin (see app/config.py) exists to
+  // trigger the gate, not to be eyeballed here for detection quality --
+  // it's shown on the Registered Plates page instead (see admin.html).
+  let cameras = fetched.filter((cam) => (cam.page || "main") !== "admin");
+
+  if (fetched.length === 0) {
     // /api/cameras came back empty or unavailable -- fall back to the
     // original single, unlabeled /video_feed rather than showing nothing.
     cameras = [{ id: null, name: null }];
+  } else if (cameras.length === 0) {
+    // Cameras exist, they're just all admin-only -- distinct from the
+    // toggle-oriented "all hidden" message below, since there's nothing
+    // here to un-hide.
+    column.innerHTML = '<p class="empty-state">No cameras configured for this dashboard.</p>';
+    return;
   }
 
   column.innerHTML = "";
@@ -351,8 +363,75 @@ function buildRejectionBlock(stats) {
   `;
 }
 
+// Local-calendar-day keys (YYYY-MM-DD), oldest to newest, matching how the
+// backend buckets vehicle_types_daily (app/db.py's date(...,'localtime')
+// and app_live/pipeline.py's time.localtime()) -- note this is the
+// *viewer's* local day, so a viewer in a different timezone than the
+// server can see a day boundary land a beat earlier/later than the server
+// did; not worth reconciling for a single-developer dashboard.
+function lastNDayKeys(n) {
+  const keys = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    keys.push(`${y}-${m}-${day}`);
+  }
+  return keys;
+}
+
+function dayLabel(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short" });
+}
+
+// A small multi-line chart, one line per vehicle type, over the last N
+// days -- colors match the donut/legend above it, so no separate legend is
+// drawn here.
+function buildVehicleTrendChart(daily, days = 7) {
+  const dayKeys = lastNDayKeys(days);
+  const hasAny = dayKeys.some((k) => daily[k] && Object.values(daily[k]).some((v) => v > 0));
+  if (!hasAny) {
+    return '<p class="empty-state">Not enough history yet.</p>';
+  }
+
+  const types = VEHICLE_TYPE_ORDER.filter((t) => dayKeys.some((k) => (daily[k] || {})[t]));
+  const W = 280, H = 100, PAD_X = 10, PAD_TOP = 10, PAD_BOTTOM = 20;
+  const plotH = H - PAD_TOP - PAD_BOTTOM;
+  const stepX = dayKeys.length > 1 ? (W - PAD_X * 2) / (dayKeys.length - 1) : 0;
+  const maxCount = Math.max(1, ...dayKeys.flatMap((k) => types.map((t) => (daily[k] || {})[t] || 0)));
+  const x = (i) => PAD_X + i * stepX;
+  const y = (v) => H - PAD_BOTTOM - (v / maxCount) * plotH;
+
+  const lines = types
+    .map((t) => {
+      const values = dayKeys.map((k) => (daily[k] || {})[t] || 0);
+      const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      const dots = values
+        .map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.2" fill="${VEHICLE_TYPE_COLORS[t]}"></circle>`)
+        .join("");
+      return `<polyline points="${points}" fill="none" stroke="${VEHICLE_TYPE_COLORS[t]}" stroke-width="1.75"></polyline>${dots}`;
+    })
+    .join("");
+
+  const labels = dayKeys
+    .map((k, i) => `<text x="${x(i).toFixed(1)}" y="${H - 5}" font-size="8" fill="var(--muted)" text-anchor="middle">${dayLabel(k)}</text>`)
+    .join("");
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" class="trend-svg" role="img" aria-label="Vehicle type counts, last ${days} days">
+      ${lines}
+      ${labels}
+    </svg>
+  `;
+}
+
 async function loadStats() {
-  const body = document.getElementById("stats-body");
+  const vehicleTypesBody = document.getElementById("vehicle-types-body");
+  const plateReadsBody = document.getElementById("plate-reads-body");
+  if (!vehicleTypesBody || !plateReadsBody) return; // this page has no stats panels
   let data;
   try {
     const res = await fetch("/api/stats");
@@ -362,15 +441,15 @@ async function loadStats() {
     return; // leave whatever was last shown rather than blanking it out
   }
 
-  body.innerHTML = `
+  vehicleTypesBody.innerHTML = `
+    <div class="stat-block-row">${buildVehicleTypeBlock(data.vehicle_types || {})}</div>
     <div class="stat-block">
-      <span class="stat-block-label">Vehicle Types</span>
-      <div class="stat-block-row">${buildVehicleTypeBlock(data.vehicle_types || {})}</div>
+      <span class="stat-block-label">Last 7 Days</span>
+      ${buildVehicleTrendChart(data.vehicle_types_daily || {})}
     </div>
-    <div class="stat-block">
-      <span class="stat-block-label">Plate Reads</span>
-      <div class="stat-block-row">${buildRejectionBlock(data.rejections || {})}</div>
-    </div>
+  `;
+  plateReadsBody.innerHTML = `
+    <div class="stat-block-row">${buildRejectionBlock(data.rejections || {})}</div>
   `;
 }
 

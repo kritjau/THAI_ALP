@@ -47,7 +47,12 @@ def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker
     cameras = []
     for cfg in configs:
         try:
-            cameras.append(CameraWorker(cfg["id"], cfg["name"], cfg["source"], on_new_read))
+            cameras.append(
+                CameraWorker(
+                    cfg["id"], cfg["name"], cfg["source"], on_new_read,
+                    page=cfg.get("page", "main"),
+                )
+            )
         except Exception:
             logger.exception(
                 "Camera %s (%s) failed to start -- skipping it, other cameras continue",
@@ -74,9 +79,14 @@ class CameraWorker:
     sighting) or a refinement of one already reported.
     """
 
-    def __init__(self, camera_id: str, name: str, source, on_new_read):
+    def __init__(self, camera_id: str, name: str, source, on_new_read, page: str = "main"):
         self.camera_id = camera_id
         self.name = name
+        # "main" (monitoring dashboard) or "admin" (Registered Plates page)
+        # -- see Settings.camera_configs(). Purely a display grouping: every
+        # camera still detects/tracks/OCRs and can trigger the gate the same
+        # way regardless of which page shows its feed.
+        self.page = page
         self.camera = CameraStream(source).start()
         self.detector = PlateDetector()
         self.vehicle_detector = VehicleDetector()

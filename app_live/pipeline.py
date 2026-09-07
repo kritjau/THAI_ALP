@@ -58,6 +58,11 @@ class LiveOnlyPipeline:
         # with the no-storage design -- resets to zero on restart same as
         # everything else here, since nothing here is meant to persist.
         self._type_counts: dict[str, int] = defaultdict(int)
+        # Same aggregate-only counts, bucketed by local calendar day, for the
+        # Vehicle Types trend chart -- still no plate text, still gone on
+        # restart. _prune_daily_counts() keeps this from growing unbounded
+        # across a long uptime.
+        self._type_counts_daily: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self.cameras = build_camera_workers(settings.camera_configs(), self._on_new_read)
         self._cameras_by_id = {cam.camera_id: cam for cam in self.cameras}
 
@@ -92,6 +97,9 @@ class LiveOnlyPipeline:
         # looser would double-count a car re-OCR'd or briefly re-tracked.
         if is_new_sighting and not is_recent_duplicate and vehicle_type:
             self._type_counts[vehicle_type] += 1
+            day = time.strftime("%Y-%m-%d", time.localtime(now))
+            self._type_counts_daily[day][vehicle_type] += 1
+            self._prune_daily_counts()
 
         if not is_recent_duplicate:
             self._new_events.put(
@@ -124,11 +132,31 @@ class LiveOnlyPipeline:
         for key in stale:
             del self._recent_plates[key]
 
+    # A little more than the 7 days the trend chart actually shows, so a
+    # viewer in a timezone slightly ahead of the server's never sees a day
+    # drop off the chart's window a beat early.
+    _DAILY_COUNTS_MAX_DAYS = 14
+
+    def _prune_daily_counts(self):
+        cutoff = time.strftime(
+            "%Y-%m-%d", time.localtime(time.time() - self._DAILY_COUNTS_MAX_DAYS * 86400)
+        )
+        stale = [day for day in self._type_counts_daily if day < cutoff]
+        for day in stale:
+            del self._type_counts_daily[day]
+
     def camera_list(self) -> list[dict]:
-        return [{"id": cam.camera_id, "name": cam.name} for cam in self.cameras]
+        return [{"id": cam.camera_id, "name": cam.name, "page": cam.page} for cam in self.cameras]
 
     def type_counts(self) -> dict[str, int]:
         return dict(self._type_counts)
+
+    def type_counts_daily(self, days: int = 7) -> dict[str, dict[str, int]]:
+        """Day (YYYY-MM-DD, local time) -> vehicle_type -> count, for the
+        last `days` calendar days including today -- powers the Vehicle
+        Types trend chart."""
+        cutoff = time.strftime("%Y-%m-%d", time.localtime(time.time() - (days - 1) * 86400))
+        return {day: dict(counts) for day, counts in self._type_counts_daily.items() if day >= cutoff}
 
     def rejection_stats(self) -> dict:
         return aggregate_rejection_stats(self.cameras)

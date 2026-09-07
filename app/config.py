@@ -121,6 +121,11 @@ class Settings:
                 "id": "1",
                 "name": os.environ.get("CAMERA_NAME_1", "Camera 1"),
                 "source": self.camera_source_value(),
+                # "main" (default) shows on the monitoring dashboard;
+                # "admin" keeps it off that page entirely and shows it on
+                # /admin instead -- for a camera that exists to trigger the
+                # gate, not to be eyeballed for detection quality.
+                "page": os.environ.get("CAMERA_PAGE_1", "main"),
             }
         ]
         i = 2
@@ -133,6 +138,7 @@ class Settings:
                     "id": str(i),
                     "name": os.environ.get(f"CAMERA_NAME_{i}", f"Camera {i}"),
                     "source": self._resolve_source(source),
+                    "page": os.environ.get(f"CAMERA_PAGE_{i}", "main"),
                 }
             )
             i += 1

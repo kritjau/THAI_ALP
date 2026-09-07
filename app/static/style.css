@@ -141,32 +141,38 @@ header h1 {
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.15);
 }
 
-.stats-panel {
+/* Vehicle Types and Plate Reads used to share one panel, side by side --
+   split into their own panels (each with its own header) since they're
+   unrelated signals someone might want to glance at independently. */
+.stats-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 1.25rem;
   margin: 0 1.75rem 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .stats-body {
   display: flex;
-  align-items: center;
-  gap: 2.5rem;
+  flex-direction: column;
+  gap: 1.1rem;
   padding: 1.1rem;
 }
 
-@media (max-width: 420px) {
-  .stats-body {
-    flex-wrap: wrap;
-  }
+.stats-body > * + * {
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
 }
 
 .stat-block {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-}
-
-.stat-block + .stat-block {
-  padding-left: 2.5rem;
-  border-left: 1px solid var(--border);
 }
 
 .stat-block-label {
@@ -259,6 +265,14 @@ header h1 {
 
 .legend-pct {
   font-weight: 400;
+}
+
+/* Vehicle Types trend chart -- one line per type, sharing the donut
+   legend's colors above it rather than repeating a second legend. */
+.trend-svg {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 /* Plate-read accept/reject rate -- the real-world signal for whether OCR
