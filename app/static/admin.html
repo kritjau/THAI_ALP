@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/style.css?v=7" />
+<link rel="stylesheet" href="/static/style.css?v=8" />
 <style>
   main.admin-main {
     display: block;
@@ -62,8 +62,11 @@
   .admin-panel .table-scroll { min-height: 0; }
   /* A camera marked CAMERA_PAGE_N=admin (see app/config.py) shows here
      instead of the monitoring dashboard -- for a camera that exists to
-     trigger the gate, not to be eyeballed for detection quality. */
-  #gate-camera-section { margin: 1.25rem 1.75rem 0; }
+     trigger the gate, not to be eyeballed for detection quality. Capped and
+     centered to match .admin-main below it instead of stretching full page
+     width -- this feed is here to confirm the gate camera sees the right
+     plate, not to be watched at a large size. */
+  #gate-camera-section { max-width: 640px; margin: 1.25rem auto 0; }
   #gate-camera-column { padding: 1rem 1.1rem; }
   .form-error {
     margin: 0 1.1rem 0.9rem;

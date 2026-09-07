@@ -484,10 +484,12 @@ async function loadStats() {
   }
 
   vehicleTypesBody.innerHTML = `
-    <div class="stat-block-row">${buildVehicleTypeBlock(data.vehicle_types || {})}</div>
-    <div class="stat-block">
-      <span class="stat-block-label">Last 7 Days</span>
-      ${buildVehicleTrendChart(data.vehicle_types_daily || {})}
+    <div class="vehicle-types-row">
+      <div class="stat-block-row">${buildVehicleTypeBlock(data.vehicle_types || {})}</div>
+      <div class="stat-block">
+        <span class="stat-block-label">Last 7 Days</span>
+        ${buildVehicleTrendChart(data.vehicle_types_daily || {})}
+      </div>
     </div>
   `;
   plateReadsBody.innerHTML = buildRejectionBlock(data.rejections_by_camera || []);
