@@ -231,6 +231,13 @@ async function setupCameras() {
   toggles.className = "camera-toggles";
   if (showControls) column.appendChild(toggles);
 
+  // Two columns once there's more than one camera on this page (a 2x2 grid
+  // at 4 cameras) -- a single camera stays full-width, matching how it
+  // looked before multi-camera support existed.
+  const grid = document.createElement("div");
+  grid.className = "video-grid" + (showControls ? "" : " single-camera");
+  column.appendChild(grid);
+
   for (const cam of cameras) {
     const camKey = cam.id ?? "default";
     const src = cam.id ? `/video_feed/${cam.id}` : "/video_feed";
@@ -243,7 +250,7 @@ async function setupCameras() {
       <img data-base-src="${src}" alt="${cam.name || "live camera feed"}" />
       <span class="live-badge"><span class="live-dot"></span>LIVE</span>
     `;
-    column.appendChild(panel);
+    grid.appendChild(panel);
 
     const img = panel.querySelector("img");
     if (!isHidden) img.src = src;

@@ -378,6 +378,27 @@ main {
   min-height: 0;
 }
 
+/* Two columns once there's more than one camera on this page -- a single
+   camera (the common case) stays full-width instead of sitting stranded in
+   half a grid. Row count falls out on its own (2 cameras -> 2x1, 4 -> 2x2,
+   5 -> 2x2 plus one on its own row), which is what "2x2" means once camera
+   count isn't a clean multiple of two. */
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.video-grid.single-camera {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 700px) {
+  .video-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .camera-toggles {
   display: flex;
   flex-wrap: wrap;
