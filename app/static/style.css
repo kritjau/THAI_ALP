@@ -164,9 +164,32 @@ header h1 {
   padding: 1.1rem;
 }
 
-.stats-body > * + * {
-  padding-top: 1.1rem;
-  border-top: 1px solid var(--border);
+/* Donut+legend and the trend chart share one row -- both are "vehicle
+   type" stats, just totals vs. a daily breakdown of the same numbers. */
+.vehicle-types-row {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.vehicle-types-row > * + * {
+  padding-left: 1.75rem;
+  border-left: 1px solid var(--border);
+}
+
+@media (max-width: 480px) {
+  .vehicle-types-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vehicle-types-row > * + * {
+    padding-left: 0;
+    padding-top: 1.1rem;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
 }
 
 .stat-block {
