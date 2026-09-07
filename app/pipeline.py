@@ -16,7 +16,11 @@ class ALPRPipeline:
     """Runs one CameraWorker per configured camera (Settings.camera_configs())
     and handles what's specific to this app: logging every read to SQLite,
     a saved crop, and the JSON export -- see app/camera_worker.py for the
-    detect/track/OCR logic shared with app_live/pipeline.py."""
+    detect/track/OCR logic shared with app_live/pipeline.py.
+
+    Each CameraWorker drives its own capture/detect/draw loop on its own
+    thread (see CameraWorker._loop) rather than being stepped from here --
+    step() below just drains whatever events those threads produced."""
 
     def __init__(self):
         Path(settings.captures_dir).mkdir(parents=True, exist_ok=True)
@@ -26,8 +30,6 @@ class ALPRPipeline:
         self._cameras_by_id = {cam.camera_id: cam for cam in self.cameras}
 
     def step(self) -> list[dict]:
-        for cam in self.cameras:
-            cam.step()
         self.json_exporter.maybe_flush()
         return self._drain_events()
 
