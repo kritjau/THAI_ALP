@@ -124,6 +124,25 @@ class CameraWorker:
         self._in_flight_lock = threading.Lock()
         threading.Thread(target=self._ocr_worker, daemon=True, name=f"ocr-{camera_id}").start()
 
+        # Its own dedicated thread, not a shared round-robin loop over every
+        # camera (the pipeline used to call step() on each camera in turn
+        # from one thread) -- with detection running on CPU, one camera's
+        # detect() call blocked every other camera's video draw/encode for
+        # its duration too, so adding cameras made *all* of their streams
+        # visibly stutter, not just the one being detected on. One thread
+        # per camera means a slow detect() here only ever delays this
+        # camera's own next frame.
+        self._running = True
+        threading.Thread(target=self._loop, daemon=True, name=f"cam-loop-{camera_id}").start()
+
+    def _loop(self):
+        while self._running:
+            try:
+                self.step()
+            except Exception:
+                logger.exception("Camera %s: error in capture/detect loop", self.camera_id)
+            time.sleep(0.03)
+
     def step(self):
         """Grab one frame, run (fast, GPU) detection at most every Nth frame,
         and always draw immediately -- OCR for any plate that needs it is
@@ -276,4 +295,5 @@ class CameraWorker:
         return buf.tobytes() if ok else None
 
     def stop(self):
+        self._running = False
         self.camera.stop()

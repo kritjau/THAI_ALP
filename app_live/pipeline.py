@@ -46,7 +46,11 @@ class LiveOnlyPipeline:
     memory for as long as its track is alive, so nothing here needs a
     data-retention policy. Also checks each read against the registered-
     plate whitelist and triggers the gate -- see app/registered_plates_db.py
-    and app/gate.py."""
+    and app/gate.py.
+
+    Each CameraWorker drives its own capture/detect/draw loop on its own
+    thread (see CameraWorker._loop) rather than being stepped from here --
+    step() below just drains whatever events those threads produced."""
 
     def __init__(self):
         self._new_events: queue.Queue = queue.Queue()
@@ -67,8 +71,6 @@ class LiveOnlyPipeline:
         self._cameras_by_id = {cam.camera_id: cam for cam in self.cameras}
 
     def step(self) -> list[dict]:
-        for cam in self.cameras:
-            cam.step()
         return self._drain_events()
 
     def _on_new_read(
