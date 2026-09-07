@@ -268,20 +268,27 @@ header h1 {
 }
 
 /* Vehicle Types trend chart -- one line per type, sharing the donut
-   legend's colors above it rather than repeating a second legend. */
+   legend's colors above it rather than repeating a second legend.
+   width:100% alone let this scale up with however wide the panel happened
+   to be (the Vehicle Types panel got the wider half of .stats-row), which
+   scaled the viewBox's day labels and dots right along with it -- capped to
+   a fixed max width so it stays a compact sparkline regardless. */
 .trend-svg {
   width: 100%;
+  max-width: 320px;
   height: auto;
   display: block;
 }
 
 /* Plate-read accept/reject rate -- the real-world signal for whether OCR
-   tuning (upscale height, character voting) is actually helping. */
+   tuning (upscale height, character voting) is actually helping. Now the
+   sole content of its own panel (see .stats-row), so it fills that width
+   instead of sharing a row with the donut. */
 .reject-stat {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-width: 180px;
+  gap: 0.6rem;
+  width: 100%;
 }
 
 .reject-bar {
@@ -315,6 +322,41 @@ header h1 {
   color: var(--muted);
   font-size: 0.78rem;
   margin-left: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Per-camera breakdown under the overall bar -- e.g. "how well is OCR doing
+   on Camera 3 specifically", not just the combined figure. */
+.camera-reject-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.camera-reject-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+}
+
+.camera-reject-name {
+  min-width: 5.5rem;
+  color: var(--text);
+}
+
+.reject-bar-sm {
+  flex: 1;
+  height: 5px;
+}
+
+.camera-reject-pct {
+  min-width: 2.2rem;
+  text-align: right;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 

@@ -345,27 +345,62 @@ function buildVehicleTypeBlock(counts) {
   `;
 }
 
+function rejectBar(pct, label, extraClass = "") {
+  return `
+    <div class="reject-bar ${extraClass}" role="img" aria-label="${label}">
+      <div class="reject-bar-fill" style="transform:scaleX(${pct / 100})"></div>
+    </div>
+  `;
+}
+
 // How many OCR reads made it past the plate-shape check (app/plate_format.py)
 // vs. got rejected as implausible -- the real-world signal for whether
 // normalization/recognition tuning (upscale height, character voting) is
 // actually helping, without needing to grep the server log for "rejected".
-function buildRejectionBlock(stats) {
-  const accepted = stats.accepted || 0;
-  const rejected = stats.rejected || 0;
-  const total = accepted + rejected;
+// `byCamera` is /api/stats's rejections_by_camera -- only "main"-page
+// cameras count toward the overall figure here, same filter setupCameras()
+// applies to the video grid: a dedicated gate camera's read quality isn't
+// what this monitoring page is checking.
+function buildRejectionBlock(byCamera) {
+  const cams = (byCamera || []).filter((c) => (c.page || "main") === "main");
+  const totals = cams.reduce(
+    (acc, c) => ({
+      accepted: acc.accepted + (c.accepted || 0),
+      rejected: acc.rejected + (c.rejected || 0),
+    }),
+    { accepted: 0, rejected: 0 }
+  );
+  const total = totals.accepted + totals.rejected;
   if (total === 0) {
     return '<p class="empty-state">No reads yet.</p>';
   }
-  const pct = Math.round((accepted / total) * 100);
+  const pct = Math.round((totals.accepted / total) * 100);
+  // Only cameras that have actually read something -- keeps this count
+  // consistent with the rows shown below it (a freshly-added camera with
+  // zero reads yet would otherwise inflate "N cameras" past what's listed).
+  const camsWithReads = cams.filter((c) => (c.accepted || 0) + (c.rejected || 0) > 0);
+
+  const perCameraRows = camsWithReads
+    .map((c) => {
+      const camTotal = (c.accepted || 0) + (c.rejected || 0);
+      const camPct = Math.round(((c.accepted || 0) / camTotal) * 100);
+      return `
+        <div class="camera-reject-row">
+          <span class="camera-reject-name">${c.name}</span>
+          ${rejectBar(camPct, `${c.name}: ${camPct}% of reads accepted`, "reject-bar-sm")}
+          <span class="camera-reject-pct">${camPct}%</span>
+        </div>`;
+    })
+    .join("");
+
   return `
     <div class="reject-stat">
-      <div class="reject-bar" role="img" aria-label="${pct}% of reads accepted">
-        <div class="reject-bar-fill" style="transform:scaleX(${pct / 100})"></div>
-      </div>
+      ${rejectBar(pct, `${pct}% of reads accepted overall`)}
       <span class="reject-stat-text">
-        <strong>${pct}%</strong> accepted
-        <span class="reject-stat-detail">(${accepted} of ${total} reads)</span>
+        <strong>${pct}%</strong> accepted overall
+        <span class="reject-stat-detail">(${totals.accepted} of ${total} reads, ${camsWithReads.length} camera${camsWithReads.length === 1 ? "" : "s"})</span>
       </span>
+      ${perCameraRows ? `<div class="camera-reject-list">${perCameraRows}</div>` : ""}
     </div>
   `;
 }
@@ -455,9 +490,7 @@ async function loadStats() {
       ${buildVehicleTrendChart(data.vehicle_types_daily || {})}
     </div>
   `;
-  plateReadsBody.innerHTML = `
-    <div class="stat-block-row">${buildRejectionBlock(data.rejections || {})}</div>
-  `;
+  plateReadsBody.innerHTML = buildRejectionBlock(data.rejections_by_camera || []);
 }
 
 function revealAdminLinkIfAvailable() {
