@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
+import urllib.error
+import urllib.request
 
 import cv2
 import numpy as np
@@ -211,3 +214,45 @@ class PlateReader:
         return cv2.warpAffine(
             crop, rotation_matrix, (new_w, new_h), borderMode=cv2.BORDER_REPLICATE
         )
+
+
+class RemoteOCRReader:
+    """Same interface as PlateReader (read(crop) -> (text, confidence)), but
+    delegates the actual inference to a dedicated OCR service over HTTP
+    instead of running PaddleOCR in this process -- see ocr_service/. Used
+    in place of PlateReader when Settings.ocr_service_url is set, so
+    camera_worker.py doesn't need to know or care which one it has.
+
+    Exists because paddlepaddle-gpu can't safely share a venv with a CUDA
+    build of torch (see README.md's Known limitations) -- running OCR as a
+    separate process in its own venv, on a GPU the detector isn't using,
+    sidesteps that collision entirely rather than working around it. Stdlib
+    urllib rather than a new dependency (requests/httpx) for a single POST
+    call."""
+
+    def __init__(self, base_url: str, timeout: float | None = None):
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout if timeout is not None else settings.ocr_service_timeout_seconds
+
+    def read(self, plate_crop: np.ndarray) -> tuple[str, float]:
+        if plate_crop is None or plate_crop.size == 0:
+            return "", 0.0
+        ok, buf = cv2.imencode(".jpg", plate_crop)
+        if not ok:
+            return "", 0.0
+        req = urllib.request.Request(
+            f"{self._base_url}/read",
+            data=buf.tobytes(),
+            method="POST",
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                data = json.loads(resp.read())
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            # Service down, slow, or returned something unparseable -- treat
+            # exactly like a failed local read (empty result) rather than
+            # taking down this camera's OCR worker thread over it.
+            logger.exception("OCR service call to %s failed -- treating as no read", self._base_url)
+            return "", 0.0
+        return data.get("text", ""), float(data.get("confidence", 0.0))

@@ -236,5 +236,10 @@ See `.env.example` for the full list.
   package namespace (they share the same on-disk paths regardless of the `-cuXX`
   suffix in the package name), breaking torch's CUDA import outright until both
   were reinstalled clean. The detector (`DEVICE`) can use GPU; PaddleOCR
-  (`OCR_DEVICE`) stays CPU-only unless you've verified a specific
-  paddlepaddle-gpu/torch version pair actually coexists.
+  (`OCR_DEVICE`) stays CPU-only in this venv unless you've verified a specific
+  paddlepaddle-gpu/torch version pair actually coexists. To put OCR on GPU
+  anyway without that risk, run `ocr_service/` as a separate process in its
+  own venv (confirmed working: `paddlepaddle-gpu==3.3.1` on a CUDA 12.9 build
+  against driver 580.173.02, on a GPU the detector wasn't using) and point
+  the main app at it with `OCR_SERVICE_URL` -- see `.env.example` and
+  `ocr_service/ocr_service.service.example`.
