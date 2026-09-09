@@ -54,6 +54,20 @@ def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker
     thread outright, leaving *no* camera (including otherwise-healthy ones)
     and an empty /api/cameras indefinitely, since nothing restarts that
     thread on its own."""
+    # One PlateReader (PaddleOCR) shared across every camera instead of one
+    # per camera -- it's the heaviest model here, so loading it once instead
+    # of once-per-camera is real memory back for every camera added (this
+    # is what let 5 cameras push a CPU-only box into swapping). Safe to
+    # share: PlateReader.read() is stateless per call (crop in, text/conf
+    # out, see app/ocr.py), so a shared lock just serializes the actual
+    # inference calls -- harmless since each camera's OCR reads already
+    # happen on their own background worker thread/queue (see
+    # CameraWorker._ocr_worker), not on the video capture/detect/draw loop
+    # that has to stay per-camera for smooth streaming. Reads across
+    # cameras queue up a little behind each other instead of running
+    # truly concurrently; nothing about the live video is affected.
+    shared_reader = PlateReader()
+    reader_lock = threading.Lock()
     cameras = []
     for cfg in configs:
         try:
@@ -61,6 +75,7 @@ def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker
                 CameraWorker(
                     cfg["id"], cfg["name"], cfg["source"], on_new_read,
                     page=cfg.get("page", "main"),
+                    reader=shared_reader, reader_lock=reader_lock,
                 )
             )
         except Exception:
@@ -74,12 +89,14 @@ def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker
 class CameraWorker:
     """One camera's full detect -> track -> OCR pipeline: its own camera read
     thread, plate detector (ByteTrack's tracker state is per-model-instance,
-    so it can't be shared across cameras), tracker, OCR reader and vehicle
-    detector. app/pipeline.py and app_live/pipeline.py each run one of these
-    per configured camera (see Settings.camera_configs()) instead of
-    duplicating this detect/track/OCR machinery per app -- the one thing
-    that differs between them (what happens with a successful read: log to
-    DB vs. check the gate whitelist) is left to the `on_new_read` callback.
+    so it can't be shared across cameras) and tracker, plus a vehicle
+    detector -- OCR reader is the one model shared across every camera (see
+    build_camera_workers), everything else here is per-camera.
+    app/pipeline.py and app_live/pipeline.py each run one of these per
+    configured camera (see Settings.camera_configs()) instead of duplicating
+    this detect/track/OCR machinery per app -- the one thing that differs
+    between them (what happens with a successful read: log to DB vs. check
+    the gate whitelist) is left to the `on_new_read` callback.
 
     on_new_read(worker, track_id, track, box, crop, text, ocr_conf, color,
     vehicle_type, was_logged_before) is called from this camera's own OCR worker thread
@@ -89,7 +106,10 @@ class CameraWorker:
     sighting) or a refinement of one already reported.
     """
 
-    def __init__(self, camera_id: str, name: str, source, on_new_read, page: str = "main"):
+    def __init__(
+        self, camera_id: str, name: str, source, on_new_read, page: str = "main",
+        reader: PlateReader | None = None, reader_lock: threading.Lock | None = None,
+    ):
         self.camera_id = camera_id
         self.name = name
         # "main" (monitoring dashboard) or "admin" (Registered Plates page)
@@ -100,7 +120,12 @@ class CameraWorker:
         self.camera = CameraStream(source).start()
         self.detector = PlateDetector()
         self.vehicle_detector = VehicleDetector()
-        self.reader = PlateReader()
+        # build_camera_workers() passes one PlateReader + lock shared across
+        # every camera (see its docstring for why that's safe); falls back
+        # to a private instance/lock so a CameraWorker built directly
+        # (tests, scripts) still works standalone.
+        self.reader = reader or PlateReader()
+        self._reader_lock = reader_lock or threading.Lock()
         self.tracker = PlateTracker(
             ttl_seconds=settings.track_ttl_seconds,
             reocr_seconds=settings.track_reocr_seconds,
@@ -195,7 +220,12 @@ class CameraWorker:
 
     def _read(self, track_id, track, crop, box, frame):
         x1, y1, x2, y2 = box
-        text, ocr_conf = self.reader.read(crop)
+        # self.reader may be shared across every camera (see
+        # build_camera_workers) -- the lock just serializes the inference
+        # calls themselves, which already only ever happen on this OCR
+        # worker thread, off the video capture/detect/draw loop.
+        with self._reader_lock:
+            text, ocr_conf = self.reader.read(crop)
         track.last_ocr = time.time()
 
         # Discard noise (motion blur, false-positive detections without Thai
