@@ -182,9 +182,15 @@ class PlateReader:
         if lines is None:
             return crop
 
+        # cv2.HoughLinesP's return shape has changed across OpenCV versions
+        # -- (N, 1, 4) historically, (N, 4) in at least one opencv-python 5.x
+        # build seen in this project's venvs (which also has opencv-python
+        # and opencv-contrib-python installed side by side, so which shape
+        # you get is really down to install-order luck between the two, not
+        # a deliberate choice). reshape(-1, 4) is a no-op for the former and
+        # fixes the latter, so this works with either.
         angles = []
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
+        for x1, y1, x2, y2 in lines.reshape(-1, 4):
             dx, dy = x2 - x1, y2 - y1
             if dx == 0:
                 continue
