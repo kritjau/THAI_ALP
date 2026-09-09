@@ -97,6 +97,14 @@ class Settings:
         "REGISTERED_PLATES_DB_PATH", "data/registered_plates.db"
     )
 
+    # If set, OCR is delegated to a dedicated service (see ocr_service/) over
+    # HTTP instead of running PaddleOCR in-process -- for putting OCR on a
+    # GPU without installing paddlepaddle-gpu in this venv (it collides with
+    # a CUDA build of torch, see README.md's Known limitations). Left blank
+    # by default: OCR then stays in-process on the CPU build, as before.
+    ocr_service_url: str = os.environ.get("OCR_SERVICE_URL", "")
+    ocr_service_timeout_seconds: float = _env_float("OCR_SERVICE_TIMEOUT_SECONDS", 5.0)
+
     def camera_source_value(self):
         """Local webcams are given as an integer index; RTSP/HTTP/file sources stay strings."""
         return self._resolve_source(self.camera_source)

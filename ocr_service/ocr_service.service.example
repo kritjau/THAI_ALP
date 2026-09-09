@@ -1,0 +1,28 @@
+# Template for a systemd --user service running ocr_service/ on GPU, in its
+# own venv (never app/'s -- see ocr_service/requirements.txt). Copy to
+# ~/.config/systemd/user/ocr_service.service, fix the paths and
+# CUDA_VISIBLE_DEVICES below, then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now ocr_service.service
+#
+# Point the main app at it via OCR_SERVICE_URL=http://127.0.0.1:8003 in its
+# .env (see .env.example), then restart app/app_live as usual.
+
+[Unit]
+Description=ALPR OCR service (GPU, isolated from the main app's venv)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/THAI_ALP
+# Pick a GPU the plate/vehicle detector (DEVICE=cuda:N in the main app's
+# .env) isn't already using -- `nvidia-smi` shows what's free.
+Environment=CUDA_VISIBLE_DEVICES=1
+ExecStart=/path/to/ocr-gpu-venv/bin/uvicorn ocr_service.main:app --host 127.0.0.1 --port 8003
+Restart=always
+RestartSec=5
+MemoryHigh=6G
+MemoryMax=8G
+
+[Install]
+WantedBy=default.target

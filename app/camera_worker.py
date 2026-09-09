@@ -11,7 +11,7 @@ from .camera import CameraStream
 from .color import classify_color
 from .config import settings
 from .detector import PlateDetector
-from .ocr import PlateReader, looks_like_thai_plate
+from .ocr import PlateReader, RemoteOCRReader, looks_like_thai_plate
 from .plate_format import looks_like_valid_plate_number
 from .plate_match import normalize_plate, vote_plate_text
 from .tracker import PlateTracker
@@ -54,20 +54,33 @@ def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker
     thread outright, leaving *no* camera (including otherwise-healthy ones)
     and an empty /api/cameras indefinitely, since nothing restarts that
     thread on its own."""
-    # One PlateReader (PaddleOCR) shared across every camera instead of one
-    # per camera -- it's the heaviest model here, so loading it once instead
-    # of once-per-camera is real memory back for every camera added (this
-    # is what let 5 cameras push a CPU-only box into swapping). Safe to
-    # share: PlateReader.read() is stateless per call (crop in, text/conf
-    # out, see app/ocr.py), so a shared lock just serializes the actual
-    # inference calls -- harmless since each camera's OCR reads already
-    # happen on their own background worker thread/queue (see
-    # CameraWorker._ocr_worker), not on the video capture/detect/draw loop
-    # that has to stay per-camera for smooth streaming. Reads across
-    # cameras queue up a little behind each other instead of running
-    # truly concurrently; nothing about the live video is affected.
-    shared_reader = PlateReader()
-    reader_lock = threading.Lock()
+    if settings.ocr_service_url:
+        # OCR runs on GPU in its own process (see ocr_service/) -- the
+        # service itself owns the one PaddleOCR instance and serializes
+        # calls to it, so cameras here don't need a shared lock too (that
+        # would only add needless client-side queuing on top of the
+        # service's own). Each camera gets its own private lock, which
+        # never contends with another camera's.
+        shared_reader = RemoteOCRReader(settings.ocr_service_url)
+        make_reader_lock = lambda: threading.Lock()
+    else:
+        # One PlateReader (PaddleOCR) shared across every camera instead of
+        # one per camera -- it's the heaviest model here, so loading it once
+        # instead of once-per-camera is real memory back for every camera
+        # added (this is what let 5 cameras push a CPU-only box into
+        # swapping). Safe to share: PlateReader.read() is stateless per call
+        # (crop in, text/conf out, see app/ocr.py), so a shared lock just
+        # serializes the actual inference calls -- harmless since each
+        # camera's OCR reads already happen on their own background worker
+        # thread/queue (see CameraWorker._ocr_worker), not on the video
+        # capture/detect/draw loop that has to stay per-camera for smooth
+        # streaming. Reads across cameras queue up a little behind each
+        # other instead of running truly concurrently; nothing about the
+        # live video is affected.
+        shared_reader = PlateReader()
+        shared_lock = threading.Lock()
+        make_reader_lock = lambda: shared_lock
+
     cameras = []
     for cfg in configs:
         try:
@@ -75,7 +88,7 @@ def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker
                 CameraWorker(
                     cfg["id"], cfg["name"], cfg["source"], on_new_read,
                     page=cfg.get("page", "main"),
-                    reader=shared_reader, reader_lock=reader_lock,
+                    reader=shared_reader, reader_lock=make_reader_lock(),
                 )
             )
         except Exception:
@@ -108,7 +121,7 @@ class CameraWorker:
 
     def __init__(
         self, camera_id: str, name: str, source, on_new_read, page: str = "main",
-        reader: PlateReader | None = None, reader_lock: threading.Lock | None = None,
+        reader: PlateReader | RemoteOCRReader | None = None, reader_lock: threading.Lock | None = None,
     ):
         self.camera_id = camera_id
         self.name = name

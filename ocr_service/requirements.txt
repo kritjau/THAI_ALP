@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+opencv-python
+paddleocr
+python-dotenv
+
+# paddlepaddle-gpu is not on PyPI -- install separately BEFORE this file, in
+# this service's OWN venv (never the same venv as app/'s torch-based
+# detector -- see README.md's Known limitations for why that collides):
+#   pip install paddlepaddle-gpu==<version matching this repo's requirements.txt paddlepaddle> \
+#       -i https://www.paddlepaddle.org.cn/packages/stable/cuXXX/
+# where cuXXX matches a CUDA build your driver supports (check
+# `nvidia-smi`'s driver version against paddlepaddle.org.cn's install matrix
+# -- a newer driver can run an older CUDA build's wheel).
