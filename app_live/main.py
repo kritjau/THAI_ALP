@@ -157,6 +157,13 @@ def api_detections(limit: int = 50):
     return list(_recent)[-limit:][::-1]
 
 
+@app.get("/api/gate-events")
+def api_gate_events():
+    # Recent gate opens from the gate camera -- separate from /api/detections
+    # (the monitoring cameras' stream), same in-memory-only nature.
+    return _pipeline.gate_events() if _pipeline else []
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (_static_dir / "index.html").read_text(encoding="utf-8")
