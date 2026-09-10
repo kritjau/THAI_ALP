@@ -65,10 +65,18 @@ def list_registered_plates() -> list[dict]:
     return [{"plate_text": r[0], "label": r[1], "created_at": r[2]} for r in rows]
 
 
-def is_registered_plate(plate_text: str) -> bool:
+def lookup(plate_text: str) -> dict | None:
+    """The registered-plates row for this plate (normalized), or None if it
+    isn't on the whitelist -- so the gate check can log *who* it let in
+    (the label), not just that it opened."""
     with _connect() as conn:
         cur = conn.execute(
-            "SELECT 1 FROM registered_plates WHERE plate_text = ? LIMIT 1",
+            "SELECT plate_text, label FROM registered_plates WHERE plate_text = ? LIMIT 1",
             (normalize_plate(plate_text),),
         )
-        return cur.fetchone() is not None
+        row = cur.fetchone()
+    return {"plate_text": row[0], "label": row[1]} if row else None
+
+
+def is_registered_plate(plate_text: str) -> bool:
+    return lookup(plate_text) is not None

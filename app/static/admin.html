@@ -77,6 +77,17 @@
     color: var(--danger);
     font-size: 0.8rem;
   }
+  .gate-activity-panel { margin: 0 1.75rem 2rem; }
+  .gate-activity-panel .table-scroll { min-height: 0; }
+  .gate-open-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #0b0d12;
+    background: var(--accent);
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+  }
 </style>
 </head>
 <body>
@@ -116,6 +127,25 @@
         <tbody id="plates-body"></tbody>
       </table>
       <p class="empty-state" id="plates-empty">No registered plates yet.</p>
+    </div>
+  </section>
+
+  <section class="panel gate-activity-panel" id="gate-activity-panel" hidden>
+    <div class="panel-header">
+      <h2>Gate Activity</h2>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Plate</th>
+            <th>Label</th>
+          </tr>
+        </thead>
+        <tbody id="gate-activity-body"></tbody>
+      </table>
+      <p class="empty-state" id="gate-activity-empty">No gate opens yet.</p>
     </div>
   </section>
 </main>
@@ -225,6 +255,11 @@ async function setupGateCamera() {
   const gateCameras = (cameras || []).filter((cam) => cam.page === "admin");
   if (gateCameras.length === 0) return;
 
+  // A gate camera is configured -- so gate access control is a separate
+  // thing from the monitoring dashboard, and the Gate Activity log below
+  // is meaningful.
+  document.getElementById("gate-activity-panel").hidden = false;
+
   const section = document.getElementById("gate-camera-section");
   const column = document.getElementById("gate-camera-column");
   section.hidden = false;
@@ -256,6 +291,35 @@ async function setupGateCamera() {
 }
 
 setupGateCamera();
+
+// Recent gate opens (registered plate matched at the gate camera) --
+// polled rather than pushed since a gate opens infrequently and this page
+// already polls /api/registered-plates.
+async function loadGateActivity() {
+  let events;
+  try {
+    const res = await fetch("/api/gate-events");
+    if (!res.ok) return;
+    events = await res.json();
+  } catch (err) {
+    return;
+  }
+  const body = document.getElementById("gate-activity-body");
+  body.innerHTML = "";
+  for (const e of events) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${new Date(e.timestamp * 1000).toLocaleTimeString()}</td>
+      <td class="plate">${e.plate_text} <span class="gate-open-tag">OPENED</span></td>
+      <td>${e.label || ""}</td>
+    `;
+    body.appendChild(row);
+  }
+  document.getElementById("gate-activity-empty").style.display = events.length ? "none" : "block";
+}
+
+loadGateActivity();
+setInterval(loadGateActivity, 4000);
 </script>
 </body>
 </html>

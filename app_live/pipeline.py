@@ -4,7 +4,7 @@ import base64
 import os
 import queue
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 
 import cv2
 
@@ -48,6 +48,15 @@ class LiveOnlyPipeline:
     plate whitelist and triggers the gate -- see app/registered_plates_db.py
     and app/gate.py.
 
+    A camera marked CAMERA_PAGE_N=admin is the "gate camera": it does gate
+    access control *only* (whitelist check -> open gate -> log it) and is
+    kept out of the monitoring stream entirely (no Detections rows, no
+    vehicle-type stats -- those are about detection quality on the lot, not
+    who's at the entrance). The monitoring cameras conversely stop
+    triggering the gate once a gate camera exists. If no camera is marked
+    admin, every camera both monitors and triggers the gate as before, so a
+    one-camera setup still works.
+
     Each CameraWorker drives its own capture/detect/draw loop on its own
     thread (see CameraWorker._loop) rather than being stepped from here --
     step() below just drains whatever events those threads produced."""
@@ -67,8 +76,18 @@ class LiveOnlyPipeline:
         # restart. _prune_daily_counts() keeps this from growing unbounded
         # across a long uptime.
         self._type_counts_daily: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        # Recent gate opens (registered plate matched at the gate camera) --
+        # in-memory, capped, gone on restart, same as everything else here.
+        # Only whitelisted plates land here, and their owners opted in by
+        # being on the list; passing traffic the gate camera sees but
+        # doesn't open for is never recorded.
+        self._gate_events: deque = deque(maxlen=50)
         self.cameras = build_camera_workers(settings.camera_configs(), self._on_new_read)
         self._cameras_by_id = {cam.camera_id: cam for cam in self.cameras}
+        # Once any camera is the designated gate camera, it's the *only*
+        # thing that opens the gate; without one, every camera does (a
+        # single-camera setup).
+        self._has_gate_camera = any(cam.page == "admin" for cam in self.cameras)
 
     def step(self) -> list[dict]:
         return self._drain_events()
@@ -88,16 +107,28 @@ class LiveOnlyPipeline:
         )
         self._recent_plates[cooldown_key] = now
         self._prune_recent_plates()
+        genuinely_new = is_new_sighting and not is_recent_duplicate
 
-        registered = registered_plates_db.is_registered_plate(text)
-        if registered and not track.gate_opened:
-            open_gate(text)
-            track.gate_opened = True
+        if worker.page == "admin":
+            # The gate camera: access control only. Nothing it sees reaches
+            # the monitoring stream.
+            self._handle_gate_read(worker, track, text, now, genuinely_new)
+            return
+
+        # A monitoring camera. It only opens the gate itself when there's no
+        # dedicated gate camera to do it (see _has_gate_camera) -- otherwise
+        # registration is not its concern and it shows no "GATE" badge.
+        registered = False
+        if not self._has_gate_camera:
+            registered = registered_plates_db.is_registered_plate(text)
+            if registered and not track.gate_opened:
+                open_gate(text)
+                track.gate_opened = True
 
         # Same "genuinely new, not a cooldown-deduped re-appearance"
         # condition the event emission below uses -- counting anything
         # looser would double-count a car re-OCR'd or briefly re-tracked.
-        if is_new_sighting and not is_recent_duplicate and vehicle_type:
+        if genuinely_new and vehicle_type:
             self._type_counts[vehicle_type] += 1
             day = time.strftime("%Y-%m-%d", time.localtime(now))
             self._type_counts_daily[day][vehicle_type] += 1
@@ -117,6 +148,24 @@ class LiveOnlyPipeline:
                     "timestamp": now,
                     "image": _as_data_uri(crop),
                     "registered": registered,
+                }
+            )
+
+    def _handle_gate_read(self, worker, track, text, now, genuinely_new):
+        if track.gate_opened:
+            return  # already let this vehicle through
+        match = registered_plates_db.lookup(text)
+        if match is None:
+            return  # not on the whitelist -- gate stays shut, nothing logged
+        open_gate(text)
+        track.gate_opened = True
+        if genuinely_new:
+            self._gate_events.appendleft(
+                {
+                    "plate_text": match["plate_text"],
+                    "label": match["label"],
+                    "camera_name": worker.name,
+                    "timestamp": now,
                 }
             )
 
@@ -162,6 +211,11 @@ class LiveOnlyPipeline:
 
     def rejection_stats(self) -> list[dict]:
         return per_camera_rejection_stats(self.cameras)
+
+    def gate_events(self) -> list[dict]:
+        """Recent gate opens (registered plate matched at the gate camera),
+        newest first -- powers the Gate Activity list on /admin."""
+        return list(self._gate_events)
 
     def latest_jpeg(self, camera_id: str | None = None) -> bytes | None:
         cam = self._resolve_camera(camera_id)
