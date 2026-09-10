@@ -188,7 +188,7 @@ function updateNoCamerasMessage(column) {
   if (!msg) {
     msg = document.createElement("p");
     msg.className = "empty-state no-cameras-message";
-    msg.textContent = "All cameras hidden -- use the toggles above to show one.";
+    msg.textContent = "All cameras hidden -- use the toggles below to show one.";
     column.appendChild(msg);
   }
 }
@@ -229,7 +229,6 @@ async function setupCameras() {
 
   const toggles = document.createElement("div");
   toggles.className = "camera-toggles";
-  if (showControls) column.appendChild(toggles);
 
   // Two columns once there's more than one camera on this page (a 2x2 grid
   // at 4 cameras) -- a single camera stays full-width, matching how it
@@ -237,6 +236,10 @@ async function setupCameras() {
   const grid = document.createElement("div");
   grid.className = "video-grid" + (showControls ? "" : " single-camera");
   column.appendChild(grid);
+
+  // Toggles sit below the grid, not above it -- the feeds are what the page
+  // is for, so they lead; the show/hide controls follow.
+  if (showControls) column.appendChild(toggles);
 
   for (const cam of cameras) {
     const camKey = cam.id ?? "default";
