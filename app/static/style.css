@@ -385,7 +385,7 @@ header h1 {
 
 main {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr);
   gap: 1.25rem;
   padding: 1.25rem 1.75rem 2rem;
   align-items: stretch;
