@@ -56,9 +56,25 @@
   /* Same layout as the detection page: the gate camera feed and the
      Registered panel sit side by side in the shared <main> grid (see
      style.css), Gate Activity spans the full width below it the way the
-     stats row does there. */
-  .admin-panel .table-scroll { min-height: 0; }
+     stats row does there. Both grid cells size to their content rather
+     than stretching to match each other -- the Registered panel is capped
+     at ~8 rows and scrolls past that. */
+  main > * { align-self: start; }
+  .admin-panel .table-scroll { min-height: 0; max-height: 24rem; }
   .gate-camera-empty { align-self: start; }
+  .plates-search {
+    padding: 0.7rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .plates-search input {
+    width: 100%;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.45rem 0.7rem;
+    color: var(--text);
+    font-size: 0.85rem;
+  }
   .gate-activity-panel { margin: 0 1.75rem 2rem; }
   .form-error {
     margin: 0 1.1rem 0.9rem;
@@ -105,6 +121,9 @@
       <h2>Registered</h2>
       <span class="count-badge" id="plates-count">0</span>
     </div>
+    <div class="plates-search">
+      <input id="plates-search-input" type="search" placeholder="Search plate or label…" aria-label="Search registered plates" />
+    </div>
     <div class="table-scroll">
       <table>
         <thead>
@@ -139,19 +158,36 @@
   </div>
 </section>
 <script>
+let allPlates = [];
+
 async function loadPlates() {
-  let plates;
   try {
     const res = await fetch("/api/registered-plates");
     if (!res.ok) throw new Error(`Couldn't load registered plates (${res.status}).`);
-    plates = await res.json();
+    allPlates = await res.json();
   } catch (err) {
     showFormError(err.message || "Couldn't load registered plates -- try refreshing.");
     return;
   }
+  renderPlates();
+}
+
+// Filtering is client-side -- the whole (small, manually-curated) list is
+// already loaded, so a substring match on plate or label is instant and
+// needs no extra endpoint.
+function renderPlates() {
+  const q = document.getElementById("plates-search-input").value.trim().toLowerCase();
+  const shown = q
+    ? allPlates.filter(
+        (p) =>
+          p.plate_text.toLowerCase().includes(q) ||
+          (p.label || "").toLowerCase().includes(q)
+      )
+    : allPlates;
+
   const body = document.getElementById("plates-body");
   body.innerHTML = "";
-  for (const p of plates) {
+  for (const p of shown) {
     const row = document.createElement("tr");
     row.innerHTML = `
       <td class="plate">${p.plate_text}</td>
@@ -160,9 +196,18 @@ async function loadPlates() {
     `;
     body.appendChild(row);
   }
-  document.getElementById("plates-count").textContent = plates.length;
-  document.getElementById("plates-empty").style.display = plates.length ? "none" : "block";
+
+  document.getElementById("plates-count").textContent = allPlates.length;
+  const empty = document.getElementById("plates-empty");
+  if (allPlates.length === 0) {
+    empty.textContent = "No registered plates yet.";
+  } else {
+    empty.textContent = "No plates match your search.";
+  }
+  empty.style.display = shown.length ? "none" : "block";
 }
+
+document.getElementById("plates-search-input").addEventListener("input", renderPlates);
 
 const formError = document.getElementById("form-error");
 
