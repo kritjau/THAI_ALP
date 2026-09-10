@@ -9,11 +9,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/static/style.css?v=8" />
 <style>
-  main.admin-main {
-    display: block;
-    max-width: 640px;
-    margin: 0 auto;
-  }
   .add-form {
     display: flex;
     gap: 0.6rem;
@@ -58,16 +53,13 @@
   .remove-btn:disabled { opacity: 0.5; cursor: default; }
   .back-link { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
   .back-link:hover { color: var(--text); }
-  .admin-panel { margin: 1.25rem 1.75rem 2rem; }
+  /* Same layout as the detection page: the gate camera feed and the
+     Registered panel sit side by side in the shared <main> grid (see
+     style.css), Gate Activity spans the full width below it the way the
+     stats row does there. */
   .admin-panel .table-scroll { min-height: 0; }
-  /* A camera marked CAMERA_PAGE_N=admin (see app/config.py) shows here
-     instead of the monitoring dashboard -- for a camera that exists to
-     trigger the gate, not to be eyeballed for detection quality. Capped and
-     centered to match .admin-main below it instead of stretching full page
-     width -- this feed is here to confirm the gate camera sees the right
-     plate, not to be watched at a large size. */
-  #gate-camera-section { max-width: 640px; margin: 1.25rem auto 0; }
-  #gate-camera-column { padding: 1rem 1.1rem; }
+  .gate-camera-empty { align-self: start; }
+  .gate-activity-panel { margin: 0 1.75rem 2rem; }
   .form-error {
     margin: 0 1.1rem 0.9rem;
     padding: 0.5rem 0.7rem;
@@ -77,7 +69,6 @@
     color: var(--danger);
     font-size: 0.8rem;
   }
-  .gate-activity-panel { margin: 0 1.75rem 2rem; }
   .gate-activity-panel .table-scroll { min-height: 0; }
   .gate-open-tag {
     font-size: 0.65rem;
@@ -95,15 +86,14 @@
   <div class="brand">
     <span class="brand-mark">Registered Plates</span>
   </div>
-  <a class="back-link" href="/">&larr; Back to dashboard</a>
-</header>
-<section class="panel" id="gate-camera-section" hidden>
-  <div class="panel-header">
-    <h2>Gate Camera</h2>
+  <div class="header-actions">
+    <a class="back-link" href="/">&larr; Back to dashboard</a>
   </div>
-  <div class="video-column" id="gate-camera-column"></div>
-</section>
-<main class="admin-main">
+</header>
+<main>
+  <div class="video-column" id="gate-camera-column">
+    <p class="empty-state gate-camera-empty">No gate camera configured.</p>
+  </div>
   <section class="panel admin-panel">
     <form class="add-form" id="add-form">
       <input id="plate-input" type="text" placeholder="Plate text (e.g. 5กค 9834)" required />
@@ -129,26 +119,25 @@
       <p class="empty-state" id="plates-empty">No registered plates yet.</p>
     </div>
   </section>
-
-  <section class="panel gate-activity-panel" id="gate-activity-panel" hidden>
-    <div class="panel-header">
-      <h2>Gate Activity</h2>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Plate</th>
-            <th>Label</th>
-          </tr>
-        </thead>
-        <tbody id="gate-activity-body"></tbody>
-      </table>
-      <p class="empty-state" id="gate-activity-empty">No gate opens yet.</p>
-    </div>
-  </section>
 </main>
+<section class="panel gate-activity-panel" id="gate-activity-panel" hidden>
+  <div class="panel-header">
+    <h2>Gate Activity</h2>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Plate</th>
+          <th>Label</th>
+        </tr>
+      </thead>
+      <tbody id="gate-activity-body"></tbody>
+    </table>
+    <p class="empty-state" id="gate-activity-empty">No gate opens yet.</p>
+  </div>
+</section>
 <script>
 async function loadPlates() {
   let plates;
@@ -253,27 +242,31 @@ async function setupGateCamera() {
     return;
   }
   const gateCameras = (cameras || []).filter((cam) => cam.page === "admin");
-  if (gateCameras.length === 0) return;
+  if (gateCameras.length === 0) return; // leave the "No gate camera configured." message
 
   // A gate camera is configured -- so gate access control is a separate
   // thing from the monitoring dashboard, and the Gate Activity log below
   // is meaningful.
   document.getElementById("gate-activity-panel").hidden = false;
 
-  const section = document.getElementById("gate-camera-section");
   const column = document.getElementById("gate-camera-column");
-  section.hidden = false;
+  column.innerHTML = "";
+  // Same video-grid the detection page uses -- a single gate camera stays
+  // full width, more than one would tile.
+  const grid = document.createElement("div");
+  grid.className = "video-grid" + (gateCameras.length > 1 ? "" : " single-camera");
+  column.appendChild(grid);
 
   for (const cam of gateCameras) {
     const src = cam.id ? `/video_feed/${cam.id}` : "/video_feed";
-    const panel = document.createElement("div");
-    panel.className = "video-panel";
+    const panel = document.createElement("section");
+    panel.className = "panel video-panel";
     panel.innerHTML = `
       ${gateCameras.length > 1 ? `<span class="camera-label">${cam.name}</span>` : ""}
       <img alt="${cam.name || "gate camera feed"}" />
       <span class="live-badge"><span class="live-dot"></span>LIVE</span>
     `;
-    column.appendChild(panel);
+    grid.appendChild(panel);
 
     const img = panel.querySelector("img");
     let lastFrameAt = Date.now();
