@@ -1,28 +1,28 @@
 :root {
-  color-scheme: dark;
-  --bg: #0b0d12;
-  --panel: #14171f;
-  --panel-alt: #191d27;
-  --border: #262b38;
-  --text: #e8eaef;
-  --muted: #8b93a7;
-  --accent: #4ade80;
-  --accent-dim: rgba(74, 222, 128, 0.15);
-  --danger: #f87171;
+  color-scheme: light;
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --panel-alt: #f0f2f6;
+  --border: #dde1e8;
+  --text: #1a1d24;
+  --muted: #5f6775;
+  --accent: #16a34a;
+  --accent-dim: rgba(22, 163, 74, 0.12);
+  --danger: #dc2626;
   --radius: 12px;
 }
 
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: #2c3242 transparent;
+  scrollbar-color: #c2c8d2 transparent;
 }
 
 body {
   margin: 0;
   font-family: "Inter", "Noto Sans Thai", "Segoe UI", system-ui, sans-serif;
   background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(74, 222, 128, 0.06), transparent),
+    radial-gradient(1200px 600px at 15% -10%, rgba(22, 163, 74, 0.05), transparent),
     var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -52,7 +52,7 @@ input:focus-visible,
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2c3242;
+  background: #c2c8d2;
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;
@@ -385,7 +385,7 @@ header h1 {
 
 main {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr);
   gap: 1.25rem;
   padding: 1.25rem 1.75rem 2rem;
   align-items: stretch;
@@ -492,7 +492,7 @@ main {
 
 .camera-toggle.active {
   color: var(--text);
-  border-color: #3a4257;
+  border-color: #b4bccb;
 }
 
 .video-panel.camera-hidden {
@@ -645,12 +645,12 @@ tbody tr:hover {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
 }
 
 .swatch-unknown {
-  background: repeating-linear-gradient(45deg, #444 0, #444 2px, #333 2px, #333 4px);
+  background: repeating-linear-gradient(45deg, #b8bfcc 0, #b8bfcc 2px, #d5dae2 2px, #d5dae2 4px);
 }
 
 .registered-badge {
