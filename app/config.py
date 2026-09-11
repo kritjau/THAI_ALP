@@ -66,6 +66,12 @@ class Settings:
     # off-switch in case it ever proves to hurt more than it helps on real
     # footage, without needing a code change to disable.
     ocr_deskew_enabled: bool = _env_bool("OCR_DESKEW_ENABLED", True)
+    # CLAHE contrast boost right before OCR -- glare/shadow on a real CCTV
+    # plate crop flattens exactly the local contrast that distinguishes
+    # visually similar Thai consonants (loop direction, tail length, a
+    # round vs. dented head), more so than it affects whether text is
+    # legible at all. Same off-switch pattern as the deskew flag above.
+    ocr_contrast_enhance_enabled: bool = _env_bool("OCR_CONTRAST_ENHANCE_ENABLED", True)
 
     models_dir: str = os.environ.get("MODELS_DIR", "models")
     captures_dir: str = os.environ.get("CAPTURES_DIR", "captures")
