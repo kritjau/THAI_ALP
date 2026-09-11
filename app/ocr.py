@@ -75,7 +75,10 @@ class PlateReader:
         crop = plate_crop
         if settings.ocr_deskew_enabled:
             crop = self._deskew(crop)
-        result = self.reader.predict(self._upscale(crop))
+        crop = self._upscale(crop)
+        if settings.ocr_contrast_enhance_enabled:
+            crop = self._enhance_contrast(crop)
+        result = self.reader.predict(crop)
         if not result:
             return "", 0.0
         page = result[0]
@@ -155,6 +158,30 @@ class PlateReader:
             return crop
         scale = target_h / h
         return cv2.resize(crop, (int(w * scale), target_h), interpolation=cv2.INTER_CUBIC)
+
+    @staticmethod
+    def _enhance_contrast(crop: np.ndarray) -> np.ndarray:
+        """CLAHE (contrast-limited adaptive histogram equalization) on the
+        luminance channel, run right before OCR sees the crop. A plate shot
+        on real CCTV footage routinely has glare or shadow gradients across
+        it that flatten local contrast -- which hurts recognizing *which*
+        Thai consonant this is far more than it hurts detecting that text is
+        present at all, since telling apart visually similar consonants (a
+        loop curling in vs. out, a tail cut short vs. long, a head that's
+        round vs. dented) comes down to exactly the fine strokes low
+        contrast blurs together first.
+
+        Works in LAB so only lightness is touched -- color (a/b channels)
+        passes through untouched, same as a plain grayscale equalization
+        would leave color alone, but LAB avoids retuning this if this ever
+        needs to reason about color again. clipLimit keeps this a contrast
+        *boost*, not a noise amplifier: too high turns sensor grain into
+        false edges, which would work against the very thing this is for."""
+        lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB)
+        l_channel, a_channel, b_channel = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        l_channel = clahe.apply(l_channel)
+        return cv2.cvtColor(cv2.merge((l_channel, a_channel, b_channel)), cv2.COLOR_LAB2BGR)
 
     @staticmethod
     def _deskew(crop: np.ndarray) -> np.ndarray:

@@ -44,9 +44,24 @@ def vote_plate_text(history: list[tuple[str, float]]) -> tuple[str, float]:
     voted_chars = []
     for i in range(len(candidates[0][0])):
         votes: dict[str, float] = {}
+        best_single_conf: dict[str, float] = {}
         for text, conf in candidates:
-            votes[text[i]] = votes.get(text[i], 0.0) + conf
-        voted_chars.append(max(votes.items(), key=lambda kv: kv[1])[0])
+            ch = text[i]
+            votes[ch] = votes.get(ch, 0.0) + conf
+            if conf > best_single_conf.get(ch, -1.0):
+                best_single_conf[ch] = conf
+        top_vote = max(votes.values())
+        tied = [ch for ch, total in votes.items() if total == top_vote]
+        if len(tied) == 1:
+            voted_chars.append(tied[0])
+        else:
+            # An exact tie in summed confidence -- not rare, since reads of
+            # the same clean plate often come back at identical confidence.
+            # Falling through to dict order here would silently pick
+            # whichever candidate happened to be read first, which carries
+            # no accuracy signal; picking by whichever single read was most
+            # confident does.
+            voted_chars.append(max(tied, key=lambda ch: best_single_conf[ch]))
     voted_text = "".join(voted_chars)
 
     matching_confs = [conf for text, conf in candidates if text == voted_text]
