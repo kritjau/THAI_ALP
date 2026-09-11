@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/style.css?v=10" />
+<link rel="stylesheet" href="/static/style.css?v=11" />
 <style>
   .add-form {
     display: flex;
@@ -75,7 +75,13 @@
     color: var(--text);
     font-size: 0.85rem;
   }
-  .gate-activity-panel { margin: 0 1.75rem 2rem; }
+  /* Matches main/.stats-row's fluid side spacing + centered cap in
+     style.css, so this panel's edges line up with theirs at every width. */
+  .gate-activity-panel {
+    margin: 0 auto 2rem;
+    max-width: 1920px;
+    padding: 0 clamp(1rem, 4vw, 1.75rem);
+  }
   .form-error {
     margin: 0 1.1rem 0.9rem;
     padding: 0.5rem 0.7rem;
