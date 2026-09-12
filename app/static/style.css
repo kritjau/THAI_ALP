@@ -604,8 +604,13 @@ main {
   width: 44px;
   height: 32px;
   border-radius: 5px;
-  object-fit: cover;
-  background: #05060a;
+  /* contain, not cover -- a two-line plate crop (serial line + province
+     line) is taller relative to its width than this box, and "cover"
+     center-crops to fill both dimensions, which was cutting the top and/or
+     bottom line off entirely rather than shrinking to fit. contain shows
+     the whole crop, letterboxed, at the same small footprint instead. */
+  object-fit: contain;
+  background: var(--panel-alt);
 }
 
 /* Detections table */
