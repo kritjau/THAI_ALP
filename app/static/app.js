@@ -154,6 +154,13 @@ function watchImageStream(img, panel) {
       reload();
     }
   }, 3000);
+
+  // Handed back so a manual "reconnect" button can force the same reload
+  // path immediately, instead of waiting out the 8s staleness window above
+  // -- that window exists to avoid reloading on every brief network blip,
+  // which is exactly what makes it slow when a viewer can see a feed is
+  // actually stuck and just wants it kicked now.
+  return reload;
 }
 
 // Which cameras a viewer has chosen to hide -- per-browser (localStorage),
@@ -252,12 +259,23 @@ async function setupCameras() {
       ${showControls ? `<span class="camera-label">${cam.name}</span>` : ""}
       <img data-base-src="${src}" alt="${cam.name || "live camera feed"}" />
       <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+      <button type="button" class="refresh-btn" title="Reconnect this camera's stream" aria-label="Reconnect ${cam.name || "camera"} stream">&#8635;</button>
     `;
     grid.appendChild(panel);
 
     const img = panel.querySelector("img");
     if (!isHidden) img.src = src;
-    watchImageStream(img, panel);
+    const reload = watchImageStream(img, panel);
+
+    // The 8s auto-reload watchdog above only fires once a feed's been silent
+    // that long -- this lets a viewer who can already see it's frozen kick
+    // it right now instead of waiting that out.
+    panel.querySelector(".refresh-btn").addEventListener("click", (e) => {
+      e.currentTarget.classList.remove("spinning");
+      void e.currentTarget.offsetWidth; // restart the animation on repeat clicks
+      e.currentTarget.classList.add("spinning");
+      reload();
+    });
 
     if (showControls) {
       const label = document.createElement("label");

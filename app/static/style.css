@@ -557,6 +557,48 @@ main {
   border-radius: 999px;
 }
 
+/* Manual reconnect for a feed that's visibly frozen -- the staleness
+   watchdog in watchImageStream()/setupGateCamera() waits out an 8s silent
+   gap before reloading on its own, which is the right call for a brief
+   network blip but not for a viewer who can already see the picture is
+   stuck and just wants it kicked now. Bottom-right so it doesn't collide
+   with the live badge (top-right) or camera label (top-left). */
+.refresh-btn {
+  position: absolute;
+  bottom: 0.7rem;
+  right: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1rem;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.refresh-btn:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.refresh-btn:active {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.refresh-btn.spinning {
+  animation: refresh-spin 0.6s ease;
+}
+
+@keyframes refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Only shown once there's more than one camera -- a single-camera setup
    (the common case) has nothing else to distinguish it from, so this stays
    out of the way instead of relabeling the only feed there is. */

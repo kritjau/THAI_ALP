@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/style.css?v=12" />
+<link rel="stylesheet" href="/static/style.css?v=13" />
 <style>
   .add-form {
     display: flex;
@@ -316,6 +316,7 @@ async function setupGateCamera() {
       ${gateCameras.length > 1 ? `<span class="camera-label">${cam.name}</span>` : ""}
       <img alt="${cam.name || "gate camera feed"}" />
       <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+      <button type="button" class="refresh-btn" title="Reconnect this camera's stream" aria-label="Reconnect ${cam.name || "gate camera"} stream">&#8635;</button>
     `;
     grid.appendChild(panel);
 
@@ -331,6 +332,16 @@ async function setupGateCamera() {
       if (Date.now() - lastFrameAt > 8000) reload();
     }, 3000);
     reload();
+
+    // Same manual kick as the detection page -- lets a viewer who can see
+    // this feed is frozen reconnect it right away instead of waiting out
+    // the 8s watchdog above.
+    panel.querySelector(".refresh-btn").addEventListener("click", (e) => {
+      e.currentTarget.classList.remove("spinning");
+      void e.currentTarget.offsetWidth;
+      e.currentTarget.classList.add("spinning");
+      reload();
+    });
   }
 }
 
