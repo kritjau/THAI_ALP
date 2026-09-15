@@ -157,7 +157,19 @@ class PlateReader:
         if h >= target_h or h == 0:
             return crop
         scale = target_h / h
-        return cv2.resize(crop, (int(w * scale), target_h), interpolation=cv2.INTER_CUBIC)
+        # Height is already fixed at target_h on this path -- only width
+        # floats, continuously, with each crop's exact aspect ratio. Left
+        # unrounded, that hands PaddleOCR's inference backend a slightly
+        # different exact input shape on nearly every single call, which is
+        # a known way to make it cache a growing, effectively unbounded set
+        # of per-shape execution plans -- consistent with ocr_service
+        # having been observed growing to 5.8GB RSS over a few hours of
+        # real traffic before the kernel OOM-killed it. Rounding the target
+        # width up to the nearest 16px collapses that to a small, bounded
+        # set of shapes instead, at the cost of at most 15px of harmless
+        # padding-equivalent stretch (well under a percent at this size).
+        target_w = -(-int(w * scale) // 16) * 16
+        return cv2.resize(crop, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
 
     @staticmethod
     def _enhance_contrast(crop: np.ndarray) -> np.ndarray:

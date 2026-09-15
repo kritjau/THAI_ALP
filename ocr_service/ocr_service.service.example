@@ -23,6 +23,19 @@ Restart=always
 RestartSec=5
 MemoryHigh=6G
 MemoryMax=8G
+# Observed in production: this process's RSS grows with sustained traffic
+# (a per-input-shape cache growing in PaddleOCR's inference backend is the
+# suspected cause -- see PlateReader._upscale()'s width-rounding comment in
+# app/ocr.py) and reached 5.8GB after ~6h uptime, at which point the
+# kernel's *global* OOM killer stepped in -- not just this unit's own
+# MemoryMax above, because by then the whole machine was out of headroom.
+# A clean, planned restart well before that point is far less disruptive
+# than an OOM kill: RemoteOCRReader (app/ocr.py) already treats a
+# momentarily-unreachable OCR service as just an empty read, not a crash,
+# so a 2-hourly restart costs a few seconds of degraded reads, not an
+# outage -- versus the swap-thrashing/camera-hang runup an uncontrolled
+# OOM event causes on the rest of the system beforehand.
+RuntimeMaxSec=2h
 
 [Install]
 WantedBy=default.target
