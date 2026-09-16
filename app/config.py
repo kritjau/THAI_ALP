@@ -111,6 +111,20 @@ class Settings:
     ocr_service_url: str = os.environ.get("OCR_SERVICE_URL", "")
     ocr_service_timeout_seconds: float = _env_float("OCR_SERVICE_TIMEOUT_SECONDS", 5.0)
 
+    # Temporary A/B evaluation only -- see app/shadow_compare.py and
+    # shadow_detector/'s module docstrings. Left blank by default: nothing
+    # about this runs, and it costs nothing, unless explicitly turned on for
+    # the trial period. Delete these three settings once the AGPL-vs-Apache
+    # detector decision is made.
+    shadow_detector_url: str = os.environ.get("SHADOW_DETECTOR_URL", "")
+    shadow_detector_sample_interval_seconds: float = _env_float(
+        "SHADOW_DETECTOR_SAMPLE_INTERVAL_SECONDS", 5.0
+    )
+    shadow_detector_timeout_seconds: float = _env_float("SHADOW_DETECTOR_TIMEOUT_SECONDS", 2.0)
+    shadow_detector_log_path: str = os.environ.get(
+        "SHADOW_DETECTOR_LOG_PATH", "data/shadow_detector_log.jsonl"
+    )
+
     def camera_source_value(self):
         """Local webcams are given as an integer index; RTSP/HTTP/file sources stay strings."""
         return self._resolve_source(self.camera_source)

@@ -14,6 +14,7 @@ from .detector import PlateDetector
 from .ocr import PlateReader, RemoteOCRReader, looks_like_thai_plate
 from .plate_format import looks_like_valid_plate_number
 from .plate_match import normalize_plate, vote_plate_text
+from .shadow_compare import ShadowComparator
 from .tracker import PlateTracker
 from .vehicle_detector import VehicleDetector
 
@@ -81,6 +82,20 @@ def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker
         shared_lock = threading.Lock()
         make_reader_lock = lambda: shared_lock
 
+    # Temporary A/B evaluation only -- see app/shadow_compare.py's module
+    # docstring. None (the default) means shadow_submit below is a no-op
+    # and nothing about this runs.
+    shadow_comparator = (
+        ShadowComparator(
+            settings.shadow_detector_url,
+            settings.shadow_detector_sample_interval_seconds,
+            settings.shadow_detector_log_path,
+            settings.shadow_detector_timeout_seconds,
+        )
+        if settings.shadow_detector_url
+        else None
+    )
+
     cameras = []
     for cfg in configs:
         try:
@@ -89,6 +104,7 @@ def build_camera_workers(configs: list[dict], on_new_read) -> list["CameraWorker
                     cfg["id"], cfg["name"], cfg["source"], on_new_read,
                     page=cfg.get("page", "main"),
                     reader=shared_reader, reader_lock=make_reader_lock(),
+                    shadow_comparator=shadow_comparator,
                 )
             )
         except Exception:
@@ -122,8 +138,13 @@ class CameraWorker:
     def __init__(
         self, camera_id: str, name: str, source, on_new_read, page: str = "main",
         reader: PlateReader | RemoteOCRReader | None = None, reader_lock: threading.Lock | None = None,
+        shadow_comparator: ShadowComparator | None = None,
     ):
         self.camera_id = camera_id
+        # Temporary A/B evaluation only -- see app/shadow_compare.py. None
+        # (the default, and what every caller but build_camera_workers'
+        # SHADOW_DETECTOR_URL-configured path passes) means this is a no-op.
+        self._shadow_comparator = shadow_comparator
         self.name = name
         # "main" (monitoring dashboard) or "admin" (Registered Plates page)
         # -- see Settings.camera_configs(). Purely a display grouping: every
@@ -195,6 +216,8 @@ class CameraWorker:
 
     def _detect_and_dispatch(self, frame):
         boxes = self.detector.detect(frame)
+        if self._shadow_comparator is not None:
+            self._shadow_comparator.maybe_submit(self.camera_id, self.name, frame, boxes)
         current_tracks = []
         for (x1, y1, x2, y2, _det_conf, track_id) in boxes:
             if track_id is None:

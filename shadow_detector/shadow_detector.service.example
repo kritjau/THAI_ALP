@@ -1,0 +1,37 @@
+# Template for a systemd --user service running shadow_detector/ on its own
+# GPU, in its own venv (see shadow_detector/requirements.txt). Copy to
+# ~/.config/systemd/user/shadow_detector.service, fix the paths and
+# CUDA_VISIBLE_DEVICES below, then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now shadow_detector.service
+#
+# Point app/app_live at it via SHADOW_DETECTOR_URL=http://127.0.0.1:8004 in
+# .env (see .env.example), then restart app/app_live as usual.
+#
+# Temporary -- see main.py's module docstring. Delete this unit
+# (systemctl --user disable --now shadow_detector.service, then rm this
+# file) once the AGPL-vs-Apache detector decision is made.
+
+[Unit]
+Description=Shadow plate detector (YOLOS, temporary A/B evaluation only)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/THAI_ALP
+# Pick a GPU neither the main detector (DEVICE=cuda:N) nor ocr_service
+# (CUDA_VISIBLE_DEVICES=N in its own unit) is already using.
+Environment=CUDA_VISIBLE_DEVICES=2
+ExecStart=/path/to/shadow-detector-venv/bin/python3 -m uvicorn shadow_detector.main:app --host 127.0.0.1 --port 8004
+Restart=always
+RestartSec=5
+MemoryHigh=6G
+MemoryMax=8G
+# Same reasoning as ocr_service.service.example's RuntimeMaxSec: this is a
+# transformer model under continuous, if throttled, real traffic for
+# potentially a day or two -- recycle it periodically rather than find out
+# the hard way whether it has the same kind of per-shape cache growth.
+RuntimeMaxSec=2h
+
+[Install]
+WantedBy=default.target

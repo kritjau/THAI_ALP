@@ -1,0 +1,17 @@
+# Temporary A/B evaluation service -- see main.py's module docstring.
+# Install in its own venv, same reasoning as ocr_service/requirements.txt:
+# torch/torchvision here would otherwise fight over shared CUDA library
+# files with whatever build the main app's venv has installed.
+fastapi
+uvicorn[standard]
+transformers
+pillow
+python-dotenv
+
+# Install torch + torchvision separately, matching this box's CUDA driver
+# (see `nvidia-smi`'s driver version against pytorch.org's install matrix),
+# e.g.:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# transformers requires torch>=2.6 (a torch.load security requirement) --
+# pick an index/version that satisfies that, not just "whatever's newest for
+# this CUDA version" if that happens to resolve older.
