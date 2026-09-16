@@ -67,3 +67,45 @@ def vote_plate_text(history: list[tuple[str, float]]) -> tuple[str, float]:
     matching_confs = [conf for text, conf in candidates if text == voted_text]
     voted_conf = max(matching_confs) if matching_confs else max(conf for _, conf in candidates)
     return voted_text, voted_conf
+
+
+def plates_are_similar(a: str, b: str, max_distance: int = 1) -> bool:
+    """True if two normalized plate reads differ by at most `max_distance`
+    single-character edits (insert/delete/substitute).
+
+    vote_plate_text() already smooths out misreads *within* one track's own
+    history, but ByteTrack can still fragment one physical car into a
+    second track id after a brief occlusion or a gap between processed
+    frames -- if that new track's own vote lands on a plate text that's
+    almost, but not exactly, what the first track already reported, the
+    exact-string cooldown in app_live/pipeline.py won't catch it, and the
+    same car shows up as two near-identical rows in the Detections list.
+    This is the looser check used to catch *that* case specifically.
+
+    Deliberately conservative (max_distance=1 by default): plate serials
+    are only a few characters, so two genuinely different real plates can
+    be one edit apart (e.g. "1กก111" vs "1กก112") -- a larger distance
+    would start merging distinct vehicles, not just a fragmented track's
+    misread of the same one. Callers scope this further (same camera, a
+    short time window) so it isn't relied on alone to tell two real plates
+    apart -- see app_live/pipeline.py's _find_similar_recent()."""
+    if a == b:
+        return True
+    if abs(len(a) - len(b)) > max_distance:
+        return False
+
+    # Plain Levenshtein distance -- short strings (plate texts are a
+    # handful of characters), so no need for anything smarter than the
+    # textbook O(len(a) * len(b)) DP table.
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, start=1):
+        curr = [i] + [0] * len(b)
+        for j, cb in enumerate(b, start=1):
+            cost = 0 if ca == cb else 1
+            curr[j] = min(
+                prev[j] + 1,       # deletion
+                curr[j - 1] + 1,   # insertion
+                prev[j - 1] + cost,  # substitution
+            )
+        prev = curr
+    return prev[-1] <= max_distance
